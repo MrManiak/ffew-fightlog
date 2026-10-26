@@ -34,6 +34,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      # pylint-django loads the Auth settings, and Alliance Auth connects to Redis at startup.
+      - name: Install redis
+        uses: shogo82148/actions-setup-redis@v1
+        with:
+          redis-version: latest
+
       - name: Run Pylint
         run: |
           pip install tox
