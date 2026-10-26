@@ -53,3 +53,7 @@ CELERYBEAT_SCHEDULE["fightlog_purge_expired_logs"] = {
     "schedule": crontab(minute=17, hour=4),
     "apply_offset": True,
 }
+
+# The seeded dev characters have no SSO tokens, and this AA task deletes every
+# character ownership without one.
+CELERYBEAT_SCHEDULE.pop("check_all_character_ownership", None)
