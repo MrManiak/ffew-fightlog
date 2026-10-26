@@ -1,0 +1,56 @@
+{% extends "fightlog/base.html" %}
+{% load i18n %}
+
+{% block fightlog_title %}{% translate "Help" %}{% endblock %}
+
+{% block fightlog_content %}
+<h2 class="h4">{% translate "Help" %}</h2>
+
+<div class="card mb-3 border-primary">
+    <div class="card-header">{% translate "The one setting that matters: your overview ship label" %}</div>
+    <div class="card-body small">
+        <p>Damage lines in your gamelog always name pilots as <code>Pilot[CORP](Ship)</code>. Every other line — reps, cap transfers,
+            neuts, jams and tackle — names them with your <strong>overview ship label</strong>. If your label shows only the ship type,
+            those lines read <code>remote shield boosted by Loki</code>, and nobody can tell which Loki it was.</p>
+        <ul>
+            <li>Any label that includes the <strong>pilot name</strong> works. The client's stock label does
+                (<code>Sabre &lt;ALLY&gt;[CORP] Pilot</code>), so if you never changed it, you're fine.</li>
+            <li>The label lives in the overview settings (Overview → settings → <em>Ships</em> / label options).
+                It is stored per EVE account and shared by that account's characters, and importing an overview profile can replace it.</li>
+            <li>If your alliance shares an overview profile, the easiest fix is a profile whose ship label includes pilot, corp and alliance.</li>
+        </ul>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">{% translate "Where are my gamelogs?" %}</div>
+    <div class="card-body small">
+        <ul class="mb-0">
+            <li><strong>Windows:</strong> <code>Documents\EVE\logs\Gamelogs</code></li>
+            <li><strong>macOS:</strong> <code>~/Documents/EVE/logs/Gamelogs</code></li>
+            <li><strong>Linux (Steam / Proton):</strong> <code>~/.steam/steam/steamapps/compatdata/8500/pfx/drive_c/users/steamuser/Documents/EVE/logs/Gamelogs</code></li>
+        </ul>
+        <p class="mt-2 mb-0">Each character session writes <code>YYYYMMDD_HHMMSS_&lt;characterID&gt;.txt</code>. Files without a character ID are empty
+            character-select sessions and are skipped. You can drop the whole folder on the upload page: only sessions in the chosen
+            date range that contain combat are sent. Only English client logs are understood for now.</p>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">{% translate "Reading a fight" %}</div>
+    <div class="card-body small">
+        <ul class="mb-0">
+            <li><strong>Grey cells</strong> are partial: that pilot didn't upload a log, so you only see what touched someone who did.
+                Logged pilots' rows are complete.</li>
+            <li><strong>Hit %</strong> is only shown for turrets, drones and fighters. Missiles, smartbombs and bombs never miss, so they show <em>n/a</em>.</li>
+            <li><strong>Unknown &lt;ship&gt;</strong> rows are ship-only labels that couldn't be matched to a pilot. A curator can attribute them.</li>
+            <li><strong>Likely friendly</strong>: a group that only exchanged smartbomb hits with us in both directions. It stays on Unknown
+                until killmails, an ally setting or a curator places it — smartbombs hit friend and foe alike, so they're never evidence.</li>
+            <li><strong>System</strong>: from zKillboard killmails first, then from a log's last system line if no wormhole could have
+                been crossed since. Wormhole jumps are never logged, so J-space fights without killmails show <em>J-space, system unknown</em>.</li>
+            <li><strong>Clock</strong>: logs are aligned against each other before duplicates are removed. Offsets above 2 seconds are highlighted.</li>
+            <li>Toggling a log only changes your view and the link you share. Excluding a log for everyone is recorded in the fight's history.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

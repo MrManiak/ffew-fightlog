@@ -1,0 +1,100 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "ffew-fightlog"
+dynamic = ["version", "description"]
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+authors = [
+    { name = "MrManiak" },
+]
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+dependencies = [
+    "allianceauth>=5.5,<6",
+    "allianceauth-app-utils>=1.33",
+    "django-esi>=10,<11",
+    "requests",
+]
+
+[project.optional-dependencies]
+test = ["coverage", "factory_boy", "requests-mock"]
+
+[project.urls]
+Homepage = "https://github.com/MrManiak/ffew-fightlog"
+Source = "https://github.com/MrManiak/ffew-fightlog"
+Changelog = "https://github.com/MrManiak/ffew-fightlog/blob/master/CHANGELOG.md"
+Tracker = "https://github.com/MrManiak/ffew-fightlog/issues"
+
+[tool.flit.module]
+name = "fightlog"
+
+[tool.flit.sdist]
+exclude = ["dev/", "tools/", "testauth/", ".github/", "e2e/"]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+multi_line_output = 3
+sections = [
+    "FUTURE",
+    "STDLIB",
+    "THIRDPARTY",
+    "DJANGO",
+    "ALLIANCEAUTH",
+    "FIRSTPARTY",
+    "LOCALFOLDER"
+]
+known_allianceauth = ["allianceauth", "app_utils"]
+known_django = ["django", "django_webtest", "esi", "eveuniverse"]
+known_first_party = ["fightlog"]
+
+[tool.pylint.'MASTER']
+ignore-patterns = ["__init__.py", "auth_hooks.py", "apps.py", "admin.py"]
+ignore-paths = ["^.*/tests/.*$", "^.*/migrations/.*$"]
+
+[tool.pylint.'BASIC']
+good-names = ["i", "j", "k", "ex", "t", "a", "b", "s", "e", "n", "x", "y", "db", "km", "pk"]
+
+[tool.pylint.'FORMAT']
+max-line-length = 120
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = [
+    "broad-exception-caught",  # deliberate: ESI and task failures are reported, never raised (noqa: BLE001)
+    "too-many-ancestors",  # Django models
+    "cyclic-import",
+    "import-outside-toplevel",
+    "imported-auth-user",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-instance-attributes",
+    "too-many-return-statements",
+    "missing-function-docstring",
+    "missing-class-docstring",
+    "missing-module-docstring",
+]

@@ -1,0 +1,566 @@
+{
+ "alliances": {
+  "1900696668": {
+   "name": "The Initiative.",
+   "ticker": "INIT."
+  },
+  "99005034": {
+   "name": "White Sky.",
+   "ticker": "W.SKY"
+  },
+  "99011699": {
+   "name": "We Forsakened Few",
+   "ticker": "WEFEW"
+  },
+  "99012530": {
+   "name": "FFEW Associates",
+   "ticker": "FFEWA"
+  },
+  "99013747": {
+   "name": "Missile Militia",
+   "ticker": "MISS"
+  },
+  "99015161": {
+   "name": "Pyrolanc Squad",
+   "ticker": "-PS-"
+  },
+  "99015283": {
+   "name": "Post-Logibidon Rehabilitation Center",
+   "ticker": "BIDON"
+  }
+ },
+ "characters": {
+  "Pilot 001": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000001
+  },
+  "Pilot 002": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000002
+  },
+  "Pilot 003": {
+   "alliance_id": 99015283,
+   "corporation_id": 98565559,
+   "id": 90000003
+  },
+  "Pilot 004": {
+   "alliance_id": 99015161,
+   "corporation_id": 98713346,
+   "id": 90000004
+  },
+  "Pilot 005": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000005
+  },
+  "Pilot 006": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000006
+  },
+  "Pilot 007": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000007
+  },
+  "Pilot 008": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000008
+  },
+  "Pilot 009": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000009
+  },
+  "Pilot 010": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000010
+  },
+  "Pilot 011": {
+   "alliance_id": null,
+   "corporation_id": 98696536,
+   "id": 90000011
+  },
+  "Pilot 012": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000012
+  },
+  "Pilot 013": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000013
+  },
+  "Pilot 014": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000014
+  },
+  "Pilot 015": {
+   "alliance_id": 99013747,
+   "corporation_id": 98787023,
+   "id": 90000015
+  },
+  "Pilot 016": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000016
+  },
+  "Pilot 017": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000017
+  },
+  "Pilot 018": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000018
+  },
+  "Pilot 019": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000019
+  },
+  "Pilot 020": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000020
+  },
+  "Pilot 021": {
+   "alliance_id": 99015161,
+   "corporation_id": 98713346,
+   "id": 90000021
+  },
+  "Pilot 022": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000022
+  },
+  "Pilot 023": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000023
+  },
+  "Pilot 024": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000024
+  },
+  "Pilot 025": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000025
+  },
+  "Pilot 026": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000026
+  },
+  "Pilot 027": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000027
+  },
+  "Pilot 028": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000028
+  },
+  "Pilot 029": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000029
+  },
+  "Pilot 030": {
+   "alliance_id": 99015161,
+   "corporation_id": 98749476,
+   "id": 90000030
+  },
+  "Pilot 031": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000031
+  },
+  "Pilot 032": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000032
+  },
+  "Pilot 033": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000033
+  },
+  "Pilot 034": {
+   "alliance_id": 99015161,
+   "corporation_id": 98815739,
+   "id": 90000034
+  },
+  "Pilot 035": {
+   "alliance_id": 99015161,
+   "corporation_id": 98749476,
+   "id": 90000035
+  },
+  "Pilot 036": {
+   "alliance_id": 99015161,
+   "corporation_id": 98749476,
+   "id": 90000036
+  },
+  "Pilot 037": {
+   "alliance_id": null,
+   "corporation_id": 98696536,
+   "id": 90000037
+  },
+  "Pilot 038": {
+   "alliance_id": 1900696668,
+   "corporation_id": 98754582,
+   "id": 90000038
+  },
+  "Pilot 039": {
+   "alliance_id": 99015161,
+   "corporation_id": 98749476,
+   "id": 90000039
+  },
+  "Pilot 040": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000040
+  },
+  "Pilot 041": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839889,
+   "id": 90000041
+  },
+  "Pilot 042": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000042
+  },
+  "Pilot 043": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000043
+  },
+  "Pilot 044": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000044
+  },
+  "Pilot 045": {
+   "alliance_id": 99015283,
+   "corporation_id": 98565559,
+   "id": 90000045
+  },
+  "Pilot 046": {
+   "alliance_id": 99015161,
+   "corporation_id": 98713346,
+   "id": 90000046
+  },
+  "Pilot 047": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000047
+  },
+  "Pilot 048": {
+   "alliance_id": null,
+   "corporation_id": 98723884,
+   "id": 90000048
+  },
+  "Pilot 049": {
+   "alliance_id": 99015161,
+   "corporation_id": 98713346,
+   "id": 90000049
+  },
+  "Pilot 050": {
+   "alliance_id": 99015161,
+   "corporation_id": 98713346,
+   "id": 90000050
+  },
+  "Pilot 051": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000051
+  },
+  "Pilot 052": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000052
+  },
+  "Pilot 053": {
+   "alliance_id": 99005034,
+   "corporation_id": 98145698,
+   "id": 90000053
+  },
+  "Pilot 054": {
+   "alliance_id": null,
+   "corporation_id": 98782114,
+   "id": 90000054
+  },
+  "Pilot 055": {
+   "alliance_id": null,
+   "corporation_id": 98696536,
+   "id": 90000055
+  },
+  "Pilot 056": {
+   "alliance_id": 99015161,
+   "corporation_id": 98713346,
+   "id": 90000056
+  },
+  "Pilot 057": {
+   "alliance_id": 99015161,
+   "corporation_id": 98808057,
+   "id": 90000057
+  },
+  "Pilot 058": {
+   "alliance_id": null,
+   "corporation_id": 98696536,
+   "id": 90000058
+  },
+  "Pilot 059": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000059
+  },
+  "Pilot 060": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000060
+  },
+  "Pilot 061": {
+   "alliance_id": 99015161,
+   "corporation_id": 98749476,
+   "id": 90000061
+  },
+  "Pilot 062": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000062
+  },
+  "Pilot 063": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000063
+  },
+  "Pilot 064": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000064
+  },
+  "Pilot 065": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000065
+  },
+  "Pilot 066": {
+   "alliance_id": null,
+   "corporation_id": 98530500,
+   "id": 90000066
+  },
+  "Pilot 068": {
+   "alliance_id": 99012530,
+   "corporation_id": 98685597,
+   "id": 90000067
+  },
+  "Pilot 069": {
+   "alliance_id": 99011699,
+   "corporation_id": 98808506,
+   "id": 90000068
+  },
+  "Pilot 071": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000069
+  },
+  "Pilot 072": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000070
+  },
+  "Pilot 073": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000085
+  },
+  "Pilot 074": {
+   "alliance_id": 99015283,
+   "corporation_id": 98565559,
+   "id": 90000075
+  },
+  "Pilot 075": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839889,
+   "id": 90000073
+  },
+  "Pilot 076": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839889,
+   "id": 90000079
+  },
+  "Pilot 077": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000083
+  },
+  "Pilot 078": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000080
+  },
+  "Pilot 079": {
+   "alliance_id": null,
+   "corporation_id": 98704266,
+   "id": 90000087
+  },
+  "Pilot 080": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000082
+  },
+  "Pilot 081": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000081
+  },
+  "Pilot 082": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000086
+  },
+  "Pilot 083": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000074
+  },
+  "Pilot 084": {
+   "alliance_id": 99015161,
+   "corporation_id": 98839301,
+   "id": 90000072
+  },
+  "Pilot 085": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000071
+  },
+  "Pilot 086": {
+   "alliance_id": null,
+   "corporation_id": 98508778,
+   "id": 90000078
+  },
+  "Pilot 087": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000084
+  },
+  "Pilot 088": {
+   "alliance_id": 99011699,
+   "corporation_id": 840323545,
+   "id": 90000077
+  },
+  "Pilot 089": {
+   "alliance_id": null,
+   "corporation_id": 98723884,
+   "id": 90000076
+  }
+ },
+ "corporations": {
+  "840323545": {
+   "alliance_id": 99011699,
+   "name": "The Forsakened Few",
+   "ticker": "FFEW"
+  },
+  "98145698": {
+   "alliance_id": 99005034,
+   "name": "Terrelian Republic.",
+   "ticker": "T.-R."
+  },
+  "98508778": {
+   "alliance_id": null,
+   "name": "CKa3aJIu Ha3BaTb KPaCuBo. Ha3BaJI.",
+   "ticker": "CK3"
+  },
+  "98530500": {
+   "alliance_id": null,
+   "name": "Whiplash Industries",
+   "ticker": "WLASH"
+  },
+  "98565559": {
+   "alliance_id": 99015283,
+   "name": "Boarding Party",
+   "ticker": "BP RU"
+  },
+  "98685597": {
+   "alliance_id": 99012530,
+   "name": "Last Chance for Redemption",
+   "ticker": "LC RN"
+  },
+  "98696536": {
+   "alliance_id": null,
+   "name": "TRX 26cm mens corporation",
+   "ticker": "TRX26"
+  },
+  "98704266": {
+   "alliance_id": null,
+   "name": "Mongolian Fire Squad",
+   "ticker": "M-F-S"
+  },
+  "98713346": {
+   "alliance_id": 99015161,
+   "name": "New House of Flanders",
+   "ticker": "NEDX"
+  },
+  "98723884": {
+   "alliance_id": null,
+   "name": "W-space guardians",
+   "ticker": "W-SPG"
+  },
+  "98749476": {
+   "alliance_id": 99015161,
+   "name": "LP Crabs",
+   "ticker": "LPCR"
+  },
+  "98754582": {
+   "alliance_id": 1900696668,
+   "name": "Baba Yagas",
+   "ticker": "YAGAS"
+  },
+  "98782114": {
+   "alliance_id": null,
+   "name": "Shadow Realms",
+   "ticker": "SH-R"
+  },
+  "98787023": {
+   "alliance_id": 99013747,
+   "name": "Nova Prospect Enterprises",
+   "ticker": "NPE."
+  },
+  "98808057": {
+   "alliance_id": 99015161,
+   "name": "Imbicillin",
+   "ticker": "IMBCN"
+  },
+  "98808506": {
+   "alliance_id": 99011699,
+   "name": "Inuyasha Industries",
+   "ticker": "INUYA"
+  },
+  "98815739": {
+   "alliance_id": 99015161,
+   "name": "No Injuries No Accidents",
+   "ticker": "NINAC"
+  },
+  "98839301": {
+   "alliance_id": 99015161,
+   "name": "Feel My Shine",
+   "ticker": "-G-F"
+  },
+  "98839889": {
+   "alliance_id": 99015161,
+   "name": "OnlyCrabsBidonUnit",
+   "ticker": "OCBU"
+  }
+ }
+}

@@ -1,0 +1,68 @@
+# Local Alliance Auth stack for developing ffew-fightlog (technical plan §10).
+#   cd dev && cp .env.example .env && docker compose up -d --build
+#   open http://localhost:8000/admin/ (admin / see .env), then http://localhost:8000/fightlog/
+name: fightlog-dev
+
+x-auth: &auth
+  build:
+    context: .
+    args:
+      AA_DOCKER_TAG: ${AA_DOCKER_TAG:-registry.gitlab.com/allianceauth/allianceauth/auth:v5.5.0}
+  image: fightlog-dev-auth
+  env_file: .env
+  volumes:
+    - ./conf/local.py:/home/allianceauth/myauth/myauth/settings/local.py:ro
+    - ./conf/celery.py:/home/allianceauth/myauth/myauth/celery.py:ro
+    - ./conf/urls.py:/home/allianceauth/myauth/myauth/urls.py:ro
+    - ./seed.py:/home/allianceauth/seed.py:ro
+    - ./session.py:/home/allianceauth/session.py:ro
+    - ..:/opt/ffew-fightlog:ro
+    - static:/var/www/myauth/static
+  depends_on:
+    auth_mysql:
+      condition: service_healthy
+    redis:
+      condition: service_started
+  working_dir: /home/allianceauth/myauth/
+  restart: unless-stopped
+
+services:
+  auth_mysql:
+    image: mariadb:11.8
+    environment:
+      MYSQL_ROOT_PASSWORD: ${AA_DB_ROOT_PASSWORD}
+      MARIADB_MYSQL_LOCALHOST_USER: 1
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./setup.sql:/docker-entrypoint-initdb.d/setup.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su=mysql", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:8
+    restart: unless-stopped
+
+  auth:
+    <<: *auth
+    command:
+      - >-
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput --clear -v 0 &&
+        python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  worker:
+    <<: *auth
+    command: ["celery -A myauth worker --pool=threads --concurrency=4 -l info"]
+
+  beat:
+    <<: *auth
+    command: ["celery -A myauth beat -l info"]
+
+volumes:
+  mysql-data:
+  static:

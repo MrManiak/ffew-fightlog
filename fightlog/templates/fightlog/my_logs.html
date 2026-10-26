@@ -1,0 +1,34 @@
+{% extends "fightlog/base.html" %}
+{% load i18n %}
+
+{% block fightlog_title %}{% translate "My logs" %}{% endblock %}
+
+{% block fightlog_content %}
+<h2 class="h4">{% translate "My logs" %}</h2>
+<p class="small text-body-secondary">{% translate "Logs you uploaded, and logs of your characters that someone else uploaded. Deleting a log rebuilds its fights and is recorded in their history." %}</p>
+{% if logs %}
+<div class="table-responsive">
+<table class="table table-sm align-middle" id="my-logs">
+    <thead><tr><th>{% translate "Session (EVE)" %}</th><th>{% translate "Listener" %}</th><th>{% translate "Status" %}</th><th>{% translate "Fights" %}</th><th></th></tr></thead>
+    <tbody>
+    {% for log in logs %}
+        <tr>
+            <td class="text-nowrap">{{ log.session_started_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ log.listener_name }}</td>
+            <td>{{ log.get_status_display }}{% if log.status_message %} <span class="small text-body-secondary">— {{ log.status_message }}</span>{% endif %}
+                {% if log.status == "no_pvp" and log.purge_after %}<span class="small text-body-secondary">({% translate "kept until" %} {{ log.purge_after|date:"Y-m-d" }})</span>{% endif %}</td>
+            <td>{% for f in log.fight_list %}<a class="d-block" href="{{ f.get_absolute_url }}">{{ f.title }}</a>{% endfor %}</td>
+            <td class="text-end">
+                <form method="post" action="{% url 'fightlog:delete_log' log.pk %}" onsubmit="return confirm('{% translate "Delete this log for everyone?" %}');">
+                    {% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">{% translate "Delete" %}</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<div class="alert alert-info">{% translate "You haven't uploaded any logs yet." %} <a href="{% url 'fightlog:upload' %}">{% translate "Upload some" %}</a>.</div>
+{% endif %}
+{% endblock %}

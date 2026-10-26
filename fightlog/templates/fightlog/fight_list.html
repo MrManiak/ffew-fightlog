@@ -1,0 +1,70 @@
+{% extends "fightlog/base.html" %}
+{% load i18n fightlog %}
+
+{% block fightlog_content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h2 class="h4 mb-0">{% translate "Fights" %}</h2>
+    <a class="btn btn-primary btn-sm" href="{% url 'fightlog:upload' %}"><i class="fas fa-upload"></i> {% translate "Upload logs" %}</a>
+</div>
+
+<form method="get" class="card card-body mb-3 fightlog-search" id="fight-search">
+    <div class="row g-2">
+        <div class="col-6 col-md-2">{{ form.date_from.label_tag }} <input class="form-control form-control-sm" type="date" name="date_from" value="{{ form.date_from.value|default_if_none:'' }}"></div>
+        <div class="col-6 col-md-2">{{ form.date_to.label_tag }} <input class="form-control form-control-sm" type="date" name="date_to" value="{{ form.date_to.value|default_if_none:'' }}"></div>
+        <div class="col-12 col-md-2"><label class="form-label" for="f-system">{{ form.system.label }}</label><input id="f-system" class="form-control form-control-sm" name="system" value="{{ form.system.value|default_if_none:'' }}"></div>
+        <div class="col-12 col-md-3"><label class="form-label" for="f-who">{{ form.who.label }}</label><input id="f-who" class="form-control form-control-sm" name="who" placeholder="name or ticker" value="{{ form.who.value|default_if_none:'' }}"></div>
+        <div class="col-12 col-md-3"><label class="form-label" for="f-ship">{{ form.ship.label }}</label><input id="f-ship" class="form-control form-control-sm" name="ship" value="{{ form.ship.value|default_if_none:'' }}"></div>
+        <div class="col-12 col-md-3"><label class="form-label" for="f-uploader">{{ form.uploader.label }}</label><input id="f-uploader" class="form-control form-control-sm" name="uploader" value="{{ form.uploader.value|default_if_none:'' }}"></div>
+        <div class="col-12 col-md-3"><label class="form-label" for="f-text">{{ form.text.label }}</label><input id="f-text" class="form-control form-control-sm" name="text" value="{{ form.text.value|default_if_none:'' }}"></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="f-min">{{ form.min_pilots.label }}</label><input id="f-min" class="form-control form-control-sm" type="number" min="0" name="min_pilots" value="{{ form.min_pilots.value|default_if_none:'' }}"></div>
+        <div class="col-6 col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="ours" id="f-ours" {% if form.ours.value %}checked{% endif %}><label class="form-check-label" for="f-ours">{{ form.ours.label }}</label></div></div>
+        <div class="col-12 col-md-2 d-flex align-items-end gap-2">
+            <button class="btn btn-sm btn-secondary" type="submit">{% translate "Search" %}</button>
+            <a class="btn btn-sm btn-link" href="{% url 'fightlog:index' %}">{% translate "Clear" %}</a>
+        </div>
+    </div>
+</form>
+
+{% if rows %}
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle" id="fight-table">
+    <thead>
+        <tr>
+            <th>{% translate "Date (EVE)" %}</th>
+            <th>{% translate "Fight" %}</th>
+            <th>{% translate "System" %}</th>
+            <th>{% translate "Duration" %}</th>
+            <th>{% translate "Sides" %}</th>
+            <th class="text-end">{% translate "Logs" %}</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td class="text-nowrap">{{ row.fight.start_at|date:"Y-m-d H:i" }}</td>
+            <td><a href="{{ row.fight.get_absolute_url }}">{{ row.fight.title }}</a>
+                {% for tag in row.fight.tags.all %}<span class="badge text-bg-secondary ms-1">#{{ tag.name }}</span>{% endfor %}
+                {% if not row.fight.is_built %}<span class="badge text-bg-warning ms-1">{% translate "processing" %}</span>{% endif %}
+            </td>
+            <td>{% if row.fight.system %}{{ row.fight.system.name }}{% elif row.fight.system_source == "wspace_unknown" %}<span class="text-body-secondary">J-space</span>{% else %}<span class="text-body-secondary">?</span>{% endif %}</td>
+            <td class="text-nowrap">{{ row.fight.duration_seconds|duration }}</td>
+            <td class="small">
+                {% for s in row.sides %}
+                    <span class="me-2 {% if s.side.is_friendly %}text-success{% else %}text-danger{% endif %}">{{ s.side.name }}: {{ s.pilots }} pilots{% if s.losses %}, {{ s.losses }} lost ({{ s.isk|isk }}){% endif %}</span>
+                {% endfor %}
+            </td>
+            <td class="text-end">{{ row.logs }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<nav class="d-flex gap-2 align-items-center">
+    {% if page.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{{ query }}&page={{ page.previous_page_number }}">&larr; {% translate "Newer" %}</a>{% endif %}
+    <span class="small text-body-secondary">{% blocktranslate with n=page.number total=page.paginator.num_pages %}Page {{ n }} of {{ total }}{% endblocktranslate %}</span>
+    {% if page.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{{ query }}&page={{ page.next_page_number }}">{% translate "Older" %} &rarr;</a>{% endif %}
+</nav>
+{% else %}
+<div class="alert alert-info">{% translate "No fights yet. Upload your gamelogs to create one." %}</div>
+{% endif %}
+{% endblock %}

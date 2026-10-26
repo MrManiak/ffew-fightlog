@@ -301,7 +301,7 @@ The fight of 2026-10-25 in J-space system 31001176 is the reference. Five of its
    - Smartbomb damage to missiles in flight is left out of pilot totals.
    - The "boosted by Loki" lines count as reps in, from a friendly Loki.
 2. **All five logs:**
-   - They form one fight.
+   - They form one fight from 20:19 to about 20:45. A later skirmish at 20:53, a Bhaalgorn neuting our pilots, is a separate small fight.
    - The 805 hits between our own pilots are each counted once.
    - Every listener's hull is filled in from the other logs: Sleipnirs for Misterma Niak, Teamsesh and Undocks with PLEX, a Loki for PaidProgramming.
    - The estimated clock offsets are all close to 0 s.

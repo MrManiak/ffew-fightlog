@@ -1,0 +1,271 @@
+{% extends "fightlog/base.html" %}
+{% load i18n static fightlog %}
+
+{% block fightlog_title %}{{ fight.title }}{% endblock %}
+
+{% block fightlog_css %}
+    {% include "bundles/datatables-2-css-bs5.html" %}
+{% endblock %}
+
+{% block fightlog_content %}
+<div id="fight-root" data-fight-id="{{ fight.pk }}">
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div>
+                <h2 class="h4 mb-1" id="fight-title">{{ fight.title }}</h2>
+                <div class="small text-body-secondary">
+                    {{ fight.start_at|date:"Y-m-d H:i:s" }} – {{ fight.end_at|date:"H:i:s" }} EVE · {{ fight.duration_seconds|duration }}
+                    · {% translate "System" %}:
+                    {% if fight.system %}<strong>{{ fight.system.name }}</strong> ({{ fight.system.region_name }}) <span class="badge text-bg-light" title="{% translate 'Where the system came from' %}">{{ fight.get_system_source_display }}</span>
+                    {% elif fight.system_source == "wspace_unknown" %}<strong>J-space, system unknown</strong>
+                    {% else %}<span>{% translate "unknown" %}</span>{% endif %}
+                    · {{ summary.logs|default:0 }} {% translate "logs" %}
+                    {% if summary.coverage %}· {% blocktranslate with a=summary.coverage.logged b=summary.coverage.pilots %}{{ a }} of {{ b }} friendly pilots uploaded{% endblocktranslate %}{% endif %}
+                </div>
+                {% for tag in fight.tags.all %}<span class="badge text-bg-secondary me-1">#{{ tag.name }}</span>{% endfor %}
+            </div>
+            <div class="text-end small">
+                {% for side in sides %}
+                    <div class="{% if side.is_friendly %}text-success{% else %}text-danger{% endif %}">
+                        <strong>{{ side.name }}</strong>:
+                        {{ summary.pilots|get_item:side.pk|default:0 }} {% translate "pilots" %},
+                        {{ summary.losses|get_item:side.pk|default:0 }} {% translate "lost" %} ({{ summary.isk_lost|get_item:side.pk|default:0|isk }} ISK)
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% if not fight.is_built %}
+            <div class="alert alert-warning py-1 mt-2 mb-0 small" id="build-banner">{% translate "This fight is being rebuilt with new data. The page refreshes when it's ready." %}</div>
+        {% endif %}
+        {% if fight.notes %}<div class="mt-2 small fightlog-notes">{{ fight.notes|linebreaksbr }}</div>{% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-3 align-items-end mb-2">
+            <div>
+                <label class="form-label small mb-0" for="perspective">{% translate "Perspective" %}</label>
+                <select class="form-select form-select-sm" id="perspective">
+                    {% for side in sides %}<option value="side:{{ side.pk }}">{{ side.name }}</option>{% endfor %}
+                    <optgroup label="{% translate 'Pilots' %}">
+                        {% for p in pilots %}<option value="pilot:{{ p.key }}">{{ p.name }}</option>{% endfor %}
+                    </optgroup>
+                    <optgroup label="{% translate 'Logs' %}">
+                        {% for log in logs %}<option value="log:{{ log.pk }}">{{ log.listener_name }}</option>{% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+            <div>
+                <label class="form-label small mb-0" for="bucket">{% translate "Bucket" %}</label>
+                <select class="form-select form-select-sm" id="bucket">
+                    <option value="5">5s</option><option value="10" selected>10s</option><option value="30">30s</option><option value="60">1m</option>
+                </select>
+            </div>
+            <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="non-ships">
+                <label class="form-check-label small" for="non-ships">{% translate "Count damage to drones, missiles and structures" %}</label>
+            </div>
+            <div class="ms-auto small text-body-secondary" id="analysis-status"></div>
+        </div>
+        <div class="fightlog-chart"><canvas id="timeline" aria-label="Timeline" role="img"></canvas></div>
+        <div class="small text-body-secondary mt-1">{% translate "Click a point on the chart to see the events in that bucket." %}</div>
+    </div>
+</div>
+
+<div id="side-tables"></div>
+
+<div class="card mb-3">
+    <div class="card-header">{% translate "Targets" %}</div>
+    <div class="card-body table-responsive" id="targets"></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header">{% translate "Logs" %} <span class="small text-body-secondary">— {% translate "toggles only change your view" %}</span></div>
+            <div class="card-body">
+                <table class="table table-sm align-middle mb-0" id="log-panel">
+                    <thead><tr><th></th><th>{% translate "Listener" %}</th><th>{% translate "Uploaded by" %}</th><th>{% translate "Events" %}</th><th>{% translate "Clock" %}</th><th></th></tr></thead>
+                    <tbody>
+                    {% for log in logs %}
+                        <tr data-log-id="{{ log.pk }}" class="{% if log.excluded %}table-secondary{% endif %}">
+                            <td><input class="form-check-input log-toggle" type="checkbox" value="{{ log.pk }}" {% if not log.excluded %}checked{% endif %} aria-label="{% translate 'Use this log' %}"></td>
+                            <td>{{ log.listener_name }}{% if log.excluded %} <span class="badge text-bg-secondary" title="{{ log.excluded_reason }}">{% translate "excluded" %}</span>{% endif %}
+                                {% if log.warnings %}<span class="badge text-bg-warning" title="{% translate 'Lines the parser did not understand' %}">{{ log.warnings|length }} {% translate "warnings" %}</span>{% endif %}</td>
+                            <td class="small">{{ log.uploader_names }}</td>
+                            <td class="small">{{ log.matched_lines }}/{{ log.combat_lines }}</td>
+                            <td class="small {% if log.clock_offset > 2 or log.clock_offset < -2 %}text-danger fw-bold{% endif %}">{{ log.clock_offset }}s</td>
+                            <td class="text-end">
+                                {% if can_edit %}
+                                <form method="post" action="{% url 'fightlog:edit' fight.pk log.excluded|yesno:'include,exclude' %}" class="d-inline">
+                                    {% csrf_token %}<input type="hidden" name="log" value="{{ log.pk }}">
+                                    {% if not log.excluded %}<input type="hidden" name="reason" value="">{% endif %}
+                                    <button class="btn btn-link btn-sm p-0" type="submit">{% if log.excluded %}{% translate "Re-include" %}{% else %}{% translate "Exclude for everyone" %}{% endif %}</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <div class="card-header">{% translate "Kills" %}</div>
+            <div class="card-body small">
+                {% for link in kills %}
+                    <div class="{% if link.role == 'related' %}text-body-secondary{% endif %}">
+                        {{ link.killmail.time|date:"H:i:s" }} ·
+                        {% if link.victim_participant %}{{ link.victim_participant.name }}{% else %}#{{ link.killmail.victim_character_id|default:"?" }}{% endif %}
+                        · {{ link.killmail.total_value|isk }} ISK
+                        {% if link.role == "related" %}<span class="badge text-bg-light">{% translate "related" %}</span>{% endif %}
+                        · <a href="{{ link.killmail.zkb_url }}" target="_blank" rel="noopener">zKill</a>
+                    </div>
+                {% empty %}
+                    <span class="text-body-secondary">{% if fight.zkb_checked_at %}{% translate "No killmails found on zKillboard." %}{% else %}{% translate "Not checked on zKillboard yet." %}{% endif %}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% if unknown_actors %}
+        <div class="card mb-3">
+            <div class="card-header">{% translate "Unattributed actors" %} <span class="small text-body-secondary">— {% translate "ship-only labels nobody could be matched to" %}</span></div>
+            <div class="card-body small">
+                {% for actor in unknown_actors %}
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                        <span>{{ actor.name }} ({% if actor.side %}{{ actor.side.name }}{% else %}{% translate "unknown side" %}{% endif %})</span>
+                        {% if can_edit %}
+                        <form method="post" action="{% url 'fightlog:edit' fight.pk 'attribute' %}" class="d-flex gap-1">
+                            {% csrf_token %}<input type="hidden" name="actor" value="{{ actor.key }}">
+                            <select name="pilot" class="form-select form-select-sm" aria-label="{% translate 'Pilot' %}">
+                                {% for p in pilots %}<option value="{{ p.key }}">{{ p.name }}</option>{% endfor %}
+                            </select>
+                            <button class="btn btn-sm btn-outline-secondary" type="submit">{% translate "Attribute" %}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if can_edit %}
+<div class="card mb-3">
+    <div class="card-header">{% translate "Edit this fight" %}</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <form method="post" action="{% url 'fightlog:edit' fight.pk 'rename' %}" class="col-md-6">
+                {% csrf_token %}
+                <label class="form-label small" for="e-title">{% translate "Title" %}</label>
+                <div class="input-group input-group-sm"><input id="e-title" class="form-control" name="title" value="{{ fight.title }}"><button class="btn btn-outline-secondary">{% translate "Rename" %}</button></div>
+            </form>
+            <form method="post" action="{% url 'fightlog:edit' fight.pk 'system' %}" class="col-md-3">
+                {% csrf_token %}
+                <label class="form-label small" for="e-system">{% translate "System" %}</label>
+                <div class="input-group input-group-sm"><input id="e-system" class="form-control" name="system" value="{{ fight.system.name|default:'' }}"><button class="btn btn-outline-secondary">{% translate "Set" %}</button></div>
+            </form>
+            <form method="post" action="{% url 'fightlog:edit' fight.pk 'tags' %}" class="col-md-3">
+                {% csrf_token %}
+                <label class="form-label small" for="e-tags">{% translate "Tags" %}</label>
+                <div class="input-group input-group-sm"><input id="e-tags" class="form-control" name="tags" value="{% for t in fight.tags.all %}#{{ t.name }} {% endfor %}"><button class="btn btn-outline-secondary">{% translate "Save" %}</button></div>
+            </form>
+            <form method="post" action="{% url 'fightlog:edit' fight.pk 'notes' %}" class="col-12">
+                {% csrf_token %}
+                <label class="form-label small" for="e-notes">{% translate "Notes" %}</label>
+                <textarea id="e-notes" class="form-control form-control-sm" name="notes" rows="2">{{ fight.notes }}</textarea>
+                <button class="btn btn-sm btn-outline-secondary mt-1">{% translate "Save notes" %}</button>
+            </form>
+            <form method="post" action="{% url 'fightlog:edit' fight.pk 'side' %}" class="col-md-6">
+                {% csrf_token %}
+                <label class="form-label small" for="e-side-keys">{% translate "Move pilots to a side" %}</label>
+                <select id="e-side-keys" class="form-select form-select-sm" name="keys" multiple size="5">
+                    {% for p in pilots %}<option value="{{ p.key }}">{{ p.name }}{% if p.corporation_ticker %} [{{ p.corporation_ticker }}]{% endif %} — {{ p.side.name|default:"Unknown" }}{% if p.side_source == "manual" %} ✎{% endif %}</option>{% endfor %}
+                </select>
+                <div class="input-group input-group-sm mt-1">
+                    <select class="form-select" name="side" aria-label="{% translate 'Side' %}">
+                        {% for s in sides %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}<option value="0">{% translate "Unknown" %}</option>
+                    </select>
+                    <button class="btn btn-outline-secondary">{% translate "Move" %}</button>
+                </div>
+            </form>
+            <div class="col-md-6">
+                {% for s in sides %}
+                <form method="post" action="{% url 'fightlog:edit' fight.pk 'side_rename' %}" class="input-group input-group-sm mb-1">
+                    {% csrf_token %}<input type="hidden" name="side" value="{{ s.pk }}">
+                    <input class="form-control" name="name" value="{{ s.name }}" aria-label="{% translate 'Side name' %}"><button class="btn btn-outline-secondary">{% translate "Rename side" %}</button>
+                </form>
+                {% endfor %}
+                <form method="post" action="{% url 'fightlog:edit' fight.pk 'split' %}" class="input-group input-group-sm mb-1">
+                    {% csrf_token %}
+                    <input class="form-control" name="at" placeholder="YYYY-MM-DD HH:MM:SS (EVE)" aria-label="{% translate 'Split time' %}"><button class="btn btn-outline-secondary">{% translate "Split here" %}</button>
+                </form>
+                {% if other_fights %}
+                <form method="post" action="{% url 'fightlog:edit' fight.pk 'merge' %}" class="input-group input-group-sm mb-1">
+                    {% csrf_token %}
+                    <select class="form-select" name="other" aria-label="{% translate 'Fight to merge' %}">{% for f in other_fights %}<option value="{{ f.pk }}">#{{ f.pk }} {{ f.title }}</option>{% endfor %}</select>
+                    <button class="btn btn-outline-secondary">{% translate "Merge" %}</button>
+                </form>
+                <form method="post" action="{% url 'fightlog:edit' fight.pk 'move' %}" class="input-group input-group-sm">
+                    {% csrf_token %}
+                    <select class="form-select" name="engagement" aria-label="{% translate 'Engagement' %}">{% for e in engagements %}<option value="{{ e.pk }}">{{ e.log.listener_name }} {{ e.start_at|date:"H:i" }}–{{ e.end_at|date:"H:i" }}</option>{% endfor %}</select>
+                    <select class="form-select" name="target" aria-label="{% translate 'Target fight' %}">{% for f in other_fights %}<option value="{{ f.pk }}">#{{ f.pk }}</option>{% endfor %}</select>
+                    <button class="btn btn-outline-secondary">{% translate "Move" %}</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if can_post %}
+<div class="card mb-3">
+    <div class="card-header">{% translate "Discord" %}</div>
+    <div class="card-body">
+        {% if webhooks %}
+        <form method="post" action="{% url 'fightlog:discord' fight.pk %}" class="d-flex gap-2" id="discord-form" data-posted="{{ discord_posts|length }}">
+            {% csrf_token %}
+            <select class="form-select form-select-sm w-auto" name="webhook" aria-label="{% translate 'Channel' %}">{% for w in webhooks %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select>
+            <button class="btn btn-sm btn-primary" type="submit"><i class="fab fa-discord"></i> {% translate "Post to Discord" %}</button>
+        </form>
+        {% else %}<span class="small text-body-secondary">{% translate "No Discord webhooks are configured. An admin can add one in the Django admin." %}</span>{% endif %}
+        {% for post in discord_posts %}
+            <div class="small text-body-secondary mt-1">{% blocktranslate with who=post.user.username when=post.posted_at|date:"Y-m-d H:i" where=post.webhook.name status=post.get_status_display %}Posted by {{ who }} on {{ when }} to {{ where }} ({{ status }}){% endblocktranslate %}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header">{% translate "History" %}</div>
+    <div class="card-body small">
+        {% for change in changes %}
+            <div>{{ change.at|date:"Y-m-d H:i" }} · {{ change.user.username|default:"automatic" }} · {{ change.get_action_display }}{% if change.details %} <span class="text-body-secondary">{{ change.details }}</span>{% endif %}</div>
+        {% empty %}<span class="text-body-secondary">{% translate "No edits yet." %}</span>{% endfor %}
+    </div>
+</div>
+
+<div class="modal fade" id="drill-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="drill-title"></h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body small" id="drill-body"></div>
+        </div>
+    </div>
+</div>
+</div>
+
+{{ fight_config|json_script:"fight-config" }}
+{% endblock %}
+
+{% block fightlog_js %}
+    {% include "bundles/chart-js.html" %}
+    {% include "bundles/datatables-2-js-bs5.html" %}
+    <script src="{% static 'fightlog/js/fight.js' %}"></script>
+{% endblock %}

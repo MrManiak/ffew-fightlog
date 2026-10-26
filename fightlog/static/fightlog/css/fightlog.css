@@ -1,0 +1,38 @@
+.fightlog .fightlog-chart {
+    position: relative;
+    height: 320px;
+}
+
+.fightlog .fightlog-dropzone {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+}
+
+.fightlog .fightlog-dropzone.active {
+    border-color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
+}
+
+.fightlog tr.fl-partial td {
+    color: var(--bs-secondary-color);
+}
+
+.fightlog tr.fl-unattributed td {
+    font-style: italic;
+    color: var(--bs-secondary-color);
+}
+
+.fightlog .fightlog-notes {
+    white-space: normal;
+    border-left: 3px solid var(--bs-border-color);
+    padding-left: 0.5rem;
+}
+
+.fightlog table.fl-pilots td,
+.fightlog table.fl-pilots th {
+    white-space: nowrap;
+}

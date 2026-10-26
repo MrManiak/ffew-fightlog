@@ -1,0 +1,26 @@
+{% extends "fightlog/base.html" %}
+{% load i18n %}
+
+{% block fightlog_title %}{% translate "Allies" %}{% endblock %}
+
+{% block fightlog_content %}
+<h2 class="h4">{% translate "Allies" %}</h2>
+<p class="small text-body-secondary">{% translate "Characters registered in this Auth are always on the friendly side. Alliances and corporations listed here are treated as friendly too when fights are rebuilt." %}</p>
+<form method="post" class="row g-2 align-items-end mb-3" id="friendly-form">
+    {% csrf_token %}
+    <div class="col-auto"><label class="form-label small" for="id_entity_type">{% translate "Type" %}</label>{{ form.entity_type }}</div>
+    <div class="col-auto"><label class="form-label small" for="id_identifier">{% translate "ID or exact name" %}</label><input class="form-control form-control-sm" id="id_identifier" name="identifier" required></div>
+    <div class="col-auto"><button class="btn btn-sm btn-primary" type="submit">{% translate "Add ally" %}</button></div>
+</form>
+<table class="table table-sm" id="friendly-table">
+    <thead><tr><th>{% translate "Name" %}</th><th>{% translate "Ticker" %}</th><th>{% translate "Type" %}</th><th>ID</th><th></th></tr></thead>
+    <tbody>
+    {% for e in entities %}
+        <tr><td>{{ e.name }}</td><td>{{ e.ticker }}</td><td>{{ e.get_entity_type_display }}</td><td>{{ e.entity_id }}</td>
+            <td class="text-end"><form method="post">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" name="delete" value="{{ e.pk }}">{% translate "Remove" %}</button></form></td></tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-body-secondary">{% translate "No allies configured." %}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

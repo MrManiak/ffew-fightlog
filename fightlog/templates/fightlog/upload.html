@@ -1,0 +1,53 @@
+{% extends "fightlog/base.html" %}
+{% load i18n static %}
+
+{% block fightlog_title %}{% translate "Upload logs" %}{% endblock %}
+
+{% block fightlog_content %}
+<h2 class="h4">{% translate "Upload gamelogs" %}</h2>
+<p class="small text-body-secondary">
+    {% blocktranslate %}Drop your <code>Documents\EVE\logs\Gamelogs</code> files here, or the whole folder.
+    Only sessions in the date range below that contain combat lines are sent; the server decides what counts as PvP.{% endblocktranslate %}
+    {% if can_upload_any %}{% translate "You may upload logs of characters you don't own." %}{% else %}{% translate "Only logs of your own characters are accepted." %}{% endif %}
+    <a href="{% url 'fightlog:help' %}">{% translate "Where are my logs?" %}</a>
+</p>
+
+<div class="row g-2 align-items-end mb-2">
+    <div class="col-auto"><label class="form-label small mb-0" for="from">{% translate "Sessions from" %}</label><input class="form-control form-control-sm" type="date" id="from"></div>
+    <div class="col-auto"><label class="form-label small mb-0" for="to">{% translate "to" %}</label><input class="form-control form-control-sm" type="date" id="to"></div>
+    <div class="col-auto">
+        <div class="btn-group btn-group-sm" role="group" aria-label="{% translate 'Presets' %}">
+            <button type="button" class="btn btn-outline-secondary" data-days="1">{% translate "Today" %}</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="3">3d</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="7">7d</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="0">{% translate "All" %}</button>
+        </div>
+    </div>
+</div>
+
+<div id="dropzone" class="fightlog-dropzone mb-3" tabindex="0" role="button" aria-label="{% translate 'Drop gamelog files here' %}">
+    <i class="fas fa-file-upload fa-2x mb-2"></i>
+    <div>{% translate "Drop files or a folder here" %}</div>
+    <div class="mt-2 d-flex gap-2 justify-content-center">
+        <label class="btn btn-sm btn-primary mb-0">{% translate "Choose files" %}<input type="file" id="file-input" multiple accept=".txt" hidden></label>
+        <label class="btn btn-sm btn-outline-primary mb-0">{% translate "Choose folder" %}<input type="file" id="folder-input" webkitdirectory directory hidden></label>
+    </div>
+</div>
+
+<div class="small mb-2" id="upload-summary"></div>
+<table class="table table-sm align-middle" id="upload-table" hidden>
+    <thead><tr><th>{% translate "File" %}</th><th>{% translate "Listener" %}</th><th>{% translate "Status" %}</th><th>{% translate "Fights" %}</th></tr></thead>
+    <tbody></tbody>
+</table>
+
+<div id="upload-config"
+     data-upload-url="{% url 'fightlog:api_upload' %}"
+     data-status-url="{% url 'fightlog:api_log' 0 %}"
+     data-default-days="{{ default_days }}"
+     data-max-mb="{{ max_mb }}"
+     data-csrf="{{ csrf_token }}"></div>
+{% endblock %}
+
+{% block fightlog_js %}
+    <script src="{% static 'fightlog/js/upload.js' %}"></script>
+{% endblock %}

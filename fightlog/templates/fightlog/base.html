@@ -1,0 +1,40 @@
+{% extends "allianceauth/base-bs5.html" %}
+{% load i18n static %}
+
+{% block page_title %}{% block fightlog_title %}{% translate "Fight Logs" %}{% endblock %}{% endblock %}
+
+{% block header_nav_brand %}{% translate "Fight Logs" %}{% endblock %}
+
+{% block header_nav_collapse_left %}
+    <li class="nav-item"><a class="nav-link" href="{% url 'fightlog:index' %}">{% translate "Fights" %}</a></li>
+    <li class="nav-item"><a class="nav-link" href="{% url 'fightlog:upload' %}">{% translate "Upload" %}</a></li>
+    <li class="nav-item"><a class="nav-link" href="{% url 'fightlog:my_logs' %}">{% translate "My logs" %}</a></li>
+    {% if perms.fightlog.curate_fights %}
+        <li class="nav-item"><a class="nav-link" href="{% url 'fightlog:friendlies' %}">{% translate "Allies" %}</a></li>
+    {% endif %}
+    <li class="nav-item"><a class="nav-link" href="{% url 'fightlog:help' %}">{% translate "Help" %}</a></li>
+{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'fightlog/css/fightlog.css' %}">
+    {% block fightlog_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+    <div class="fightlog">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} py-2">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% block fightlog_content %}{% endblock %}
+        <p class="text-body-secondary small mt-4 mb-0 fightlog-footer">
+            EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide.
+            ffew-fightlog is not affiliated with CCP hf.
+        </p>
+    </div>
+{% endblock %}
+
+{% block extra_javascript %}
+    {% block fightlog_js %}{% endblock %}
+{% endblock %}
