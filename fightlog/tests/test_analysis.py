@@ -1,6 +1,7 @@
 """Analysis core: store, engagements, offsets, dedupe, hulls, sides, attribution, aggregation."""
 
 import random
+import sys
 import time
 from collections import Counter
 from unittest import TestCase
@@ -423,10 +424,24 @@ class AggregateTest(TestCase):
         self.assertEqual(breakdown["damaged_by"][0]["name"], "Foe")
 
 
+def _traced() -> bool:
+    """Coverage or a debugger slows Python code 2-3x."""
+    try:
+        import coverage
+    except ImportError:
+        return sys.gettrace() is not None
+    return coverage.Coverage.current() is not None or sys.gettrace() is not None
+
+
 class PerformanceTest(TestCase):
-    """Technical plan §5.5: 250k events, 45 of 50 logs active, well under 2 s."""
+    """Technical plan §5.5: 250k events, 45 of 50 logs active, well under 2 s.
+
+    The limits are tripled under coverage. The timing that M4 is judged on is
+    e2e/perf_e2e.py, through the HTTP API of the dev stack.
+    """
 
     def test_250k_events(self):
+        slack = 3.0 if _traced() else 1.0
         random.seed(7)
         actors = [{"key": f"p:{i}", "kind": "pilot"} for i in range(300)]
         participants = {
@@ -453,8 +468,8 @@ class PerformanceTest(TestCase):
         result = aggregate(store, participants, set(range(5, 50)), Perspective("side", "0"), 10)
         elapsed = time.perf_counter() - start
         self.assertTrue(result["pilots"])
-        self.assertLess(elapsed, 2.0, f"aggregation took {elapsed:.2f}s")
+        self.assertLess(elapsed, 2.0 * slack, f"aggregation took {elapsed:.2f}s")
         blob = store.encode()
         start = time.perf_counter()
         EventStore.decode(blob)
-        self.assertLess(time.perf_counter() - start, 1.0)
+        self.assertLess(time.perf_counter() - start, 1.0 * slack)
