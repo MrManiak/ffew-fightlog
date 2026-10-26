@@ -13,6 +13,7 @@ from fightlog import app_settings
 from fightlog.analysis.aggregate import Perspective, aggregate, drilldown, pilot_breakdown
 from fightlog.analysis.identity import display_name
 from fightlog.analysis.store import FIGHT_COLUMNS, EventStore
+from fightlog.catalog import load_catalog
 from fightlog.models import CombatLog, Fight, Participant, Side
 
 _LRU: "OrderedDict[tuple, EventStore]" = OrderedDict()
@@ -106,6 +107,7 @@ def parse_logs_param(fight: Fight, value: str | None) -> set[int]:
 
 
 def kills_for(fight: Fight) -> list[dict]:
+    catalog = load_catalog()
     out = []
     for link in fight.fight_killmails.select_related("killmail", "victim_participant"):
         km = link.killmail
@@ -118,6 +120,7 @@ def kills_for(fight: Fight) -> list[dict]:
                 "victim": link.victim_participant.name if link.victim_participant else None,
                 "side": link.victim_participant.side_id if link.victim_participant else None,
                 "ship_type_id": km.victim_ship_type_id,
+                "ship": getattr(catalog.by_id(km.victim_ship_type_id), "name", None),
                 "value": km.total_value,
                 "system_id": km.solar_system_id,
                 "url": km.zkb_url,
@@ -142,11 +145,16 @@ def _cache_key(fight: Fight, *parts) -> str:
 
 
 def analysis(
-    fight: Fight, active_logs: set[int], perspective: str | None, bucket: int, include_non_ships: bool
+    fight: Fight,
+    active_logs: set[int],
+    perspective: str | None,
+    bucket: int,
+    include_non_ships: bool,
+    window: tuple[int, int] | None = None,
 ) -> dict:
     side = default_side(fight)
     persp = Perspective.parse(perspective, str(side.pk) if side else "0")
-    key = _cache_key(fight, sorted(active_logs), str(persp), bucket, include_non_ships)
+    key = _cache_key(fight, sorted(active_logs), str(persp), bucket, include_non_ships, window)
     cached = cache.get(key)
     if cached is not None:
         return cached
@@ -155,7 +163,7 @@ def analysis(
         return {"empty": True}
     participants = participants_map(fight)
     kills = kills_for(fight)
-    result = aggregate(store, participants, active_logs, persp, bucket, include_non_ships, kills)
+    result = aggregate(store, participants, active_logs, persp, bucket, include_non_ships, kills, window)
     result["kills"] = kills
     result["sides"] = [
         {"id": s.pk, "name": s.name, "order": s.order, "friendly": s.is_friendly} for s in fight.sides.all()
@@ -172,12 +180,21 @@ def events(fight: Fight, active_logs: set[int], start: int, end: int, key: str |
     return drilldown(store, participants_map(fight), active_logs, start, end, key, kinds, limit, offset, names)
 
 
-def pilot(fight: Fight, active_logs: set[int], key: str) -> dict:
+def pilot(
+    fight: Fight,
+    active_logs: set[int],
+    key: str,
+    include_non_ships: bool = False,
+    perspective: str | None = None,
+    window: tuple[int, int] | None = None,
+) -> dict:
     store = load_fight_store(fight)
     if store is None:
         return {}
     participants = participants_map(fight)
-    result = pilot_breakdown(store, participants, active_logs, key)
+    persp = Perspective.parse(perspective, "0")
+    only_log = int(persp.value) if persp.kind == "log" and persp.value.isdigit() else None
+    result = pilot_breakdown(store, participants, active_logs, key, include_non_ships, only_log, window)
     p = Participant.objects.filter(fight=fight, key=key).select_related("side").first()
     result["participant"] = participants.get(key, {"key": key})
     if p:

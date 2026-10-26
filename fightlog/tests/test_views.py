@@ -150,6 +150,32 @@ class ApiTest(ViewTestCase):
         status = self.client.get(reverse("fightlog:api_fight_status", args=[self.fight.pk])).json()
         self.assertTrue(status["built"])
 
+    def test_time_window(self):
+        self.login(self.member)
+        url = reverse("fightlog:api_analysis", args=[self.fight.pk])
+        whole = self.client.get(url).json()
+        lo, hi = whole["start"] + 120, whole["start"] + 299
+        zoomed = self.client.get(url, {"from": lo, "to": hi}).json()
+        self.assertEqual(zoomed["window"], [lo, hi])
+        self.assertTrue(lo <= zoomed["start"] <= zoomed["end"] <= hi)
+        self.assertLess(sum(zoomed["series"]["damage_out"]), sum(whole["series"]["damage_out"]))
+        # Every 10 s bucket the window touches, quiet ones included.
+        self.assertEqual(zoomed["labels"], list(range(lo // 10 * 10, hi // 10 * 10 + 10, 10)))
+        for bad in ({"from": hi, "to": lo}, {"from": lo}, {"from": "x", "to": hi}, {"from": 0, "to": 10**7}):
+            self.assertIsNone(self.client.get(url, bad).json()["window"], bad)
+        # Events are clipped to the window; the pilot drill-down follows it too.
+        events = self.client.get(
+            reverse("fightlog:api_events", args=[self.fight.pk]),
+            {"start": 0, "end": 2**31 - 1, "from": lo, "to": hi, "limit": "1000"},
+        ).json()
+        self.assertTrue(events["events"])
+        self.assertTrue(all(lo <= e["t"] <= hi for e in events["events"]))
+        row = max(zoomed["pilots"], key=lambda r: r["damage_out"])
+        pilot = self.client.get(
+            reverse("fightlog:api_pilot", args=[self.fight.pk]), {"key": row["key"], "from": lo, "to": hi}
+        ).json()
+        self.assertEqual(sum(w["damage"] for w in pilot["weapons"]), row["damage_out"])
+
 
 class UploadApiTest(ViewTestCase):
     def test_upload_flow(self):

@@ -410,6 +410,22 @@ class AggregateTest(TestCase):
         self.assertEqual(empty["labels"], [])
         self.assertEqual(str(Perspective.parse("bogus", "3")), "side:3")
 
+    def test_time_window(self):
+        result = aggregate(self.store, self.participants, {1, 2}, Perspective("side", "10"), 10, window=(101, 111))
+        us = {r["key"]: r for r in result["pilots"]}["p:us"]
+        self.assertEqual((us["damage_out"], us["hits"], us["misses"]), (0, 0, 1))
+        self.assertEqual((us["ff_out"], us["non_ship_out"], us["damage_in"]), (30, 900, 300))
+        self.assertEqual((result["start"], result["end"], result["window"]), (101, 111, [101, 111]))
+        self.assertEqual(result["labels"], [100, 110])  # the whole window, quiet buckets included
+        # A hit counts when any log's copy of it falls inside the window.
+        late = aggregate(self.store, self.participants, {1, 2}, Perspective("side", "10"), 10, window=(106, 112))
+        self.assertEqual({r["key"]: r for r in late["pilots"]}["p:us"]["damage_out"], 500)
+        breakdown = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us", window=(101, 111))
+        weapons = {w["name"]: w for w in breakdown["weapons"]}
+        self.assertEqual((weapons["Gun"]["damage"], weapons["Gun"]["misses"], weapons["Gun"]["other"]), (0, 1, 10))
+        self.assertEqual((weapons["Bomb"]["ff"], weapons["Bomb"]["non_ship"]), (30, 900))
+        self.assertEqual(breakdown["damaged_by"], [{"name": "Foe", "value": 300}])
+
     def test_drilldown_and_breakdown(self):
         dd = drilldown(self.store, self.participants, {1, 2}, 100, 112, key="p:us", limit=3, log_names={1: "us"})
         self.assertEqual(dd["total"], 11)
@@ -418,7 +434,20 @@ class AggregateTest(TestCase):
         kinds = drilldown(self.store, self.participants, {1}, 0, 999, kinds={int(Kind.REP_SHIELD)})
         self.assertEqual(kinds["events"][0]["src"], "Mate")
         breakdown = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us")
-        self.assertEqual(breakdown["weapons"][0]["name"], "Bomb")
+        weapons = {w["name"]: w for w in breakdown["weapons"]}
+        # Same rules as the table: the duplicate counts once, friendly fire, the missile
+        # and the NPC sit beside the damage instead of in it.
+        self.assertEqual(breakdown["weapons"][0]["name"], "Gun")
+        self.assertEqual(
+            {k: weapons["Gun"][k] for k in ("damage", "hits", "misses", "ff", "non_ship", "other")},
+            {"damage": 500, "hits": 1, "misses": 1, "ff": 0, "non_ship": 0, "other": 10},
+        )
+        self.assertEqual((weapons["Bomb"]["damage"], weapons["Bomb"]["ff"], weapons["Bomb"]["non_ship"]), (0, 30, 900))
+        self.assertEqual(breakdown["targets"], [{"name": "Foe", "value": 500}])
+        with_non = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us", include_non_ships=True)
+        self.assertEqual((with_non["weapons"][0]["name"], with_non["weapons"][0]["damage"]), ("Bomb", 900))
+        log_two = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us", only_log=2)
+        self.assertEqual([(w["name"], w["damage"]) for w in log_two["weapons"]], [("Gun", 500)])
         self.assertEqual(breakdown["repped_by"][0]["name"], "Mate")
         self.assertTrue(breakdown["ewar_by"])
         self.assertEqual(breakdown["damaged_by"][0]["name"], "Foe")

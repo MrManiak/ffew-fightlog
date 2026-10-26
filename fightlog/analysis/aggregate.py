@@ -37,6 +37,7 @@ F_AOE, F_CAN_MISS, F_NON_SHIP, F_OBSERVED = (
     int(Flag.NON_SHIP_TARGET),
     int(Flag.OBSERVED),
 )
+MAX_WINDOW_BUCKETS = 20000  # a selected window wider than this is drawn over its events only
 
 
 @dataclass
@@ -98,11 +99,14 @@ def aggregate(
     bucket: int = 10,
     include_non_ships: bool = False,
     kills: list[dict] | None = None,
+    window: tuple[int, int] | None = None,
 ) -> dict:
     """Aggregate the active logs' events.
 
     ``participants`` maps every actor key to {"name", "kind", "side", "has_log", ...},
     with ship-only actors already mapped to the pilot they were attributed to via "alias".
+    ``window`` (first, last second, inclusive) narrows everything to that time span. It is
+    applied before de-duplication, so a hit counts if any log's copy of it falls inside.
     """
     actors = store.actors
     alias = [participants.get(a["key"], {}).get("alias", a["key"]) for a in actors]
@@ -145,12 +149,14 @@ def aggregate(
             continue
         if log_perspective is not None and log_id != log_perspective:
             continue
+        t = t_col[i]
+        if window is not None and not window[0] <= t <= window[1]:
+            continue
         g = dup_col[i]
         if g >= 0:
             if g in seen_dups:
                 continue
             seen_dups.add(g)
-        t = t_col[i]
         start = t if start is None or t < start else start
         end = t if end is None or t > end else end
         kind, amount, flags = kind_col[i], amount_col[i], flags_col[i]
@@ -233,7 +239,10 @@ def aggregate(
                 tgt_row[f"{name}_in"] += value
 
     labels = sorted(timeline)
-    if labels:
+    if labels and window is not None and (window[1] - window[0]) // bucket <= MAX_WINDOW_BUCKETS:
+        # Show the whole selected window, quiet stretches included.
+        full = list(range((window[0] // bucket) * bucket, (window[1] // bucket) * bucket + bucket, bucket))
+    elif labels:
         full = list(range(labels[0], labels[-1] + bucket, bucket))
     else:
         full = []
@@ -287,6 +296,7 @@ def aggregate(
         "targets": target_rows,
         "totals": {k: dict(v) for k, v in totals.items()},
         "perspective": str(perspective),
+        "window": list(window) if window else None,
     }
 
 
@@ -354,38 +364,72 @@ def drilldown(
     return {"total": total, "offset": offset, "events": out}
 
 
-def pilot_breakdown(store, participants: dict[str, dict], active_logs: set[int], key: str) -> dict:
+def pilot_breakdown(
+    store,
+    participants: dict[str, dict],
+    active_logs: set[int],
+    key: str,
+    include_non_ships: bool = False,
+    only_log: int | None = None,
+    window: tuple[int, int] | None = None,
+) -> dict:
+    """One pilot's weapons, targets, attackers, reps and ewar, counted by the same rules as ``aggregate``.
+
+    A weapon's ``damage``, ``hits`` and ``misses`` add up to the pilot's row in the table. What the table
+    leaves out of "Dmg out" is reported beside it: ``ff`` (friendly fire), ``non_ship`` (drones, missiles
+    and structures, unless they are included) and ``other`` (NPCs and others outside the fight).
+    ``only_log`` mirrors a log perspective, under which the table counts that one log, and ``window``
+    the table's time window.
+    """
     actors = store.actors
     alias = [participants.get(a["key"], {}).get("alias", a["key"]) for a in actors]
-    weapons: dict[str, dict] = defaultdict(lambda: {"damage": 0, "hits": 0, "misses": 0})
+    side = [participants.get(k, {}).get("side") for k in alias]
+    is_party = [k in participants and participants[k].get("party", True) for k in alias]
+    weapons: dict[str, dict] = defaultdict(
+        lambda: {"damage": 0, "hits": 0, "misses": 0, "ff": 0, "non_ship": 0, "other": 0}
+    )
     targets: dict[str, int] = defaultdict(int)
     sources: dict[str, int] = defaultdict(int)
     reppers: dict[str, int] = defaultdict(int)
     ewar: dict[str, int] = defaultdict(int)
     seen = set()
-    for _t, kind, src, tgt, module, amount, _quality, flags, _line_no, log_id, dup in store.rows():
-        if log_id not in active_logs:
+    for t, kind, src, tgt, module, amount, _quality, flags, _line_no, log_id, dup in store.rows():
+        if log_id not in active_logs or (only_log is not None and log_id != only_log):
+            continue
+        if window is not None and not window[0] <= t <= window[1]:
             continue
         if dup >= 0:
             if dup in seen:
                 continue
             seen.add(dup)
         s, d = alias[src], alias[tgt]
-        if key not in (s, d):
+        if key not in (s, d) or not is_party[src]:
             continue
         name_s = participants.get(s, {}).get("name") or display_name(actors[src])
         name_d = participants.get(d, {}).get("name") or display_name(actors[tgt])
-        if kind == K_DAMAGE:
-            if s == key:
-                w = weapons[store.module_name(module) or "?"]
+        same_side = side[src] is not None and side[src] == side[tgt]
+        if kind == K_DAMAGE and s == key:
+            w = weapons[store.module_name(module) or "?"]
+            non_ship = bool(flags & F_NON_SHIP)
+            if not is_party[tgt] and not non_ship:
+                w["other"] += amount
+            elif non_ship and not include_non_ships:
+                w["non_ship"] += amount
+            elif same_side:
+                w["ff"] += amount
+            else:
                 w["damage"] += amount
                 if flags & F_CAN_MISS:
                     w["hits"] += 1
                 targets[name_d] += amount
-            else:
+        elif not is_party[tgt]:
+            continue
+        elif kind == K_DAMAGE:
+            if not same_side:
                 sources[name_s] += amount
-        elif kind == K_MISS and s == key:
-            weapons[store.module_name(module) or "?"]["misses"] += 1
+        elif kind == K_MISS:
+            if s == key and not same_side:
+                weapons[store.module_name(module) or "?"]["misses"] += 1
         elif kind in REP_FIELD and d == key:
             reppers[name_s] += amount
         elif kind in (K_NEUT, K_NOS, K_JAM) + K_TACKLE and d == key:
@@ -394,8 +438,9 @@ def pilot_breakdown(store, participants: dict[str, dict], active_logs: set[int],
     def top(d):
         return sorted(({"name": k, "value": v} for k, v in d.items()), key=lambda r: -r["value"])[:25]
 
+    shown = (w for w in weapons.items() if any(w[1].values()))
     return {
-        "weapons": sorted(({"name": k, **v} for k, v in weapons.items()), key=lambda r: -r["damage"]),
+        "weapons": sorted(({"name": k, **v} for k, v in shown), key=lambda r: (-r["damage"], -r["ff"], r["name"])),
         "targets": top(targets),
         "damaged_by": top(sources),
         "repped_by": top(reppers),

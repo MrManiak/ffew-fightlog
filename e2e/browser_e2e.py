@@ -33,11 +33,40 @@ def close_modal(page):
     page.wait_for_selector(".modal-backdrop", state="detached", timeout=10000)
 
 
+TOTALS_JS = """() => {
+    const r = window.fightlog.lastResult();
+    const tile = document.querySelector('#totals [data-total="Damage"] [title]');
+    return {
+        tiles: document.querySelectorAll('#totals [data-total]').length,
+        caption: document.querySelector('#totals .w-100').textContent,
+        title: tile ? tile.title : '',
+        expected: r.series.damage_out.reduce((a, b) => a + b, 0).toLocaleString(),
+    };
+}"""
+
+
+DEATHS_JS = """() => {
+    const r = window.fightlog.lastResult();
+    const d = window.fightlog.deaths();
+    const last = r.labels[r.labels.length - 1] + r.bucket - 1;
+    return {
+        markers: d.hits.length,
+        expected: r.kills.filter((k) => k.time >= r.labels[0] && k.time <= last).length,
+        labelled: d.labelled,
+        hovered: d.hovered,
+        hits: d.hits,
+    };
+}"""
+
+
 def main() -> int:
     ARTIFACTS.mkdir(exist_ok=True)
+    # The real 2026-10-25 fight from run_e2e.py, not perf_e2e.py's synthetic one.
     fight_id = int(
         django_shell(
-            "from fightlog.models import Fight; print(max(Fight.objects.all(), key=lambda f: f.engagements.count()).pk)"
+            "from fightlog.models import Fight; "
+            "real = Fight.objects.exclude(participants__key__startswith='p:Synthpilot '); "
+            "print(max(real, key=lambda f: f.engagements.count()).pk)"
         )
     )
     with sync_playwright() as pw:
@@ -71,17 +100,26 @@ def main() -> int:
         pilot_rows = page.locator("table.fl-pilots tbody tr").count()
         check("W5 per-side tables", tables >= 2 and pilot_rows > 50, f"{tables} tables, {pilot_rows} rows")
         check("W6 targets table", page.locator("#targets-table tbody tr").count() > 0)
+        totals = page.evaluate(TOTALS_JS)
+        check(
+            "W19 the totals strip matches the chart",
+            totals["tiles"] >= 6
+            and totals["title"].endswith(totals["expected"])
+            and "whole fight" in totals["caption"],
+            f"{totals['tiles']} tiles; {totals['title']}; {totals['caption']}",
+        )
         page.screenshot(path=str(ARTIFACTS / "fight.png"), full_page=True)
 
         # Log toggles change the view and the URL
         boxes = page.locator(".log-toggle")
+        n_logs = boxes.count()
         first_id = boxes.first.get_attribute("value")
         boxes.first.uncheck()
         page.wait_for_function(f"!new URLSearchParams(location.search).get('logs').split(',').includes('{first_id}')")
-        page.wait_for_function("document.getElementById('analysis-status').textContent.includes('4 logs')")
+        page.wait_for_function(f"document.getElementById('analysis-status').textContent.includes('{n_logs - 1} logs')")
         check("W7 unticking a log updates the URL and the analysis", True, page.url.split("?", 1)[1][:60])
         boxes.first.check()
-        page.wait_for_function("document.getElementById('analysis-status').textContent.includes('5 logs')")
+        page.wait_for_function(f"document.getElementById('analysis-status').textContent.includes('{n_logs} logs')")
 
         # Perspective
         page.select_option("#perspective", index=1)
@@ -89,10 +127,18 @@ def main() -> int:
         check("W8 perspective switch", True, page.input_value("#perspective"))
         page.select_option("#perspective", index=0)
 
-        # Pilot drill-down modal
-        page.locator("a.fl-pilot").first.click()
+        # Pilot drill-down modal: its weapons add up to the pilot's "Dmg out" in the table
+        first_row = page.locator("table.fl-pilots tbody tr").first
+        table_damage = first_row.locator("td").nth(3).inner_text()
+        first_row.locator("a.fl-pilot").click()
         page.wait_for_selector("#drill-modal.show", timeout=30000)
-        check("W9 pilot drill-down", "Weapons" in page.inner_text("#drill-body"), page.inner_text("#drill-title"))
+        page.wait_for_selector("#weapons-table tfoot", timeout=30000)
+        popup_damage = page.locator("#weapons-table tfoot td").nth(1).inner_text()
+        check(
+            "W9 pilot drill-down adds up to the table",
+            popup_damage == table_damage,
+            f"{page.inner_text('#drill-title')}: table {table_damage}, pop-up {popup_damage}",
+        )
         close_modal(page)
 
         # Clicking the chart opens the events in that bucket
@@ -110,6 +156,117 @@ def main() -> int:
             page.inner_text("#drill-title"),
         )
         close_modal(page)
+
+        # Deaths: a marker per killmail in the chart's time range
+        deaths = page.evaluate(DEATHS_JS)
+        check(
+            "W21 a death marker per killmail, no ship names in the whole-fight view",
+            deaths["markers"] == deaths["expected"] > 10
+            and deaths["labelled"] == 0
+            and page.is_visible("#death-legend"),
+            f"{deaths['markers']} markers for {deaths['expected']} killmails in range; {page.inner_text('#death-legend')[:40]}",
+        )
+        box = page.locator("#timeline").bounding_box()
+        spot = deaths["hits"][len(deaths["hits"]) // 2]
+        page.mouse.move(box["x"] + spot["x"], box["y"] + spot["y"])
+        page.wait_for_selector(".fightlog-death-tip", state="visible", timeout=10000)
+        tip = page.inner_text(".fightlog-death-tip")
+        hovered = page.evaluate(DEATHS_JS)["hovered"]
+        tooltip_quiet = page.evaluate(
+            "() => { const t = window.fightlog.chart().tooltip; return t.opacity === 0 || (!t.title.length && !t.body.length); }"
+        )
+        check(
+            "W22 hovering a death shows who lost what",
+            " lost " in tip and "zKillboard" in tip and hovered is not None and tooltip_quiet,
+            tip.replace("\n", " | "),
+        )
+        page.evaluate(
+            "() => { window.__opened = []; window.open = (url) => { window.__opened.push(url); return null; }; }"
+        )
+        page.mouse.click(box["x"] + spot["x"], box["y"] + spot["y"])
+        page.wait_for_function("() => window.__opened.length > 0", timeout=10000)
+        opened = page.evaluate("() => window.__opened[0]")
+        page.wait_for_timeout(600)
+        check(
+            "W23 clicking a death opens its killmail on zKillboard",
+            opened.startswith("https://zkillboard.com/kill/") and page.locator("#drill-modal.show").count() == 0,
+            opened,
+        )
+        page.mouse.move(box["x"] + 5, box["y"] + 5)
+
+        # Dragging across the chart zooms the whole page into that time window
+        js_sum = "(s) => s.reduce((a, b) => a + b, 0)"
+        full = page.evaluate(
+            f"() => {{ const r = window.fightlog.lastResult(); return {{labels: r.labels.length, damage: ({js_sum})(r.series.damage_out)}}; }}"
+        )
+        area = page.evaluate(
+            "() => { const a = window.fightlog.chart().chartArea; return {left: a.left, right: a.right, top: a.top, bottom: a.bottom}; }"
+        )
+        box = page.locator("#timeline").bounding_box()
+        y = box["y"] + (area["top"] + area["bottom"]) / 2
+        x0 = box["x"] + area["left"] + (area["right"] - area["left"]) * 0.55
+        x1 = box["x"] + area["left"] + (area["right"] - area["left"]) * 0.8
+        page.mouse.move(x0, y)
+        page.mouse.down()
+        page.mouse.move(x1, y, steps=8)
+        band = page.locator(".fightlog-zoom-box")
+        band_label = band.inner_text() if band.is_visible() else ""
+        band_box = band.bounding_box() or {"width": 0}
+        # Chart.js draws nothing when the tooltip has no title or body left after filtering.
+        tooltip_hidden = page.evaluate(
+            "() => { const t = window.fightlog.chart().tooltip; return t.opacity === 0 || (!t.title.length && !t.body.length); }"
+        )
+        page.mouse.up()
+        check(
+            "W15 the selection is drawn while dragging",
+            "–" in band_label and band_box["width"] > 100 and tooltip_hidden,
+            f"band {band_box['width']:.0f}px wide, label '{band_label}', tooltip hidden: {tooltip_hidden}",
+        )
+        page.wait_for_function("new URLSearchParams(location.search).has('from')")
+        page.wait_for_function("document.getElementById('analysis-status').textContent.includes('pilots')")
+        zoomed = page.evaluate(
+            f"() => {{ const r = window.fightlog.lastResult(); return {{window: r.window, labels: r.labels.length, damage: ({js_sum})(r.series.damage_out)}}; }}"
+        )
+        page.wait_for_timeout(600)
+        check(
+            "W16 dragging across the chart zooms the page into that window",
+            zoomed["window"]
+            and zoomed["labels"] < full["labels"]
+            and 0 < zoomed["damage"] < full["damage"]
+            and page.is_visible("#zoom-bar")
+            and page.locator("#drill-modal.show").count() == 0,
+            f"{zoomed['labels']} of {full['labels']} buckets, damage {zoomed['damage']:,} of {full['damage']:,}; "
+            + page.inner_text("#zoom-text")[:30],
+        )
+        totals = page.evaluate(TOTALS_JS)
+        check(
+            "W20 the totals strip follows the window",
+            totals["title"].endswith(totals["expected"]) and "whole fight" not in totals["caption"],
+            f"{totals['title']}; {totals['caption']}",
+        )
+        deaths = page.evaluate(DEATHS_JS)
+        check(
+            "W24 zoomed in, the deaths in the window get ship names",
+            0 < deaths["markers"] == deaths["expected"] and deaths["labelled"] > 0,
+            f"{deaths['markers']} markers, {deaths['labelled']} named",
+        )
+        first_row = page.locator("table.fl-pilots tbody tr").first
+        table_damage = first_row.locator("td").nth(3).inner_text()
+        first_row.locator("a.fl-pilot").click()
+        page.wait_for_selector("#weapons-table tfoot", timeout=30000)
+        popup_damage = page.locator("#weapons-table tfoot td").nth(1).inner_text()
+        check(
+            "W17 the pilot drill-down follows the window",
+            popup_damage == table_damage,
+            f"{table_damage} / {popup_damage}",
+        )
+        close_modal(page)
+        page.click("#zoom-reset")
+        page.wait_for_function("!new URLSearchParams(location.search).has('from')")
+        page.wait_for_function(
+            f"() => window.fightlog.lastResult() && window.fightlog.lastResult().labels.length === {full['labels']}"
+        )
+        check("W18 'Show the whole fight' resets the zoom", page.is_hidden("#zoom-bar"))
 
         # Upload page: the browser pre-filter
         page.goto(f"{BASE}/fightlog/upload/")

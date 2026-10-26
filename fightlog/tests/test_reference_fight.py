@@ -8,7 +8,7 @@ from django.test import TestCase
 
 from fightlog.models import CombatLog, Fight, FightKillmail, Participant
 from fightlog.services import zkb
-from fightlog.services.analysis import analysis, default_active_logs, default_side, load_fight_store
+from fightlog.services.analysis import analysis, default_active_logs, default_side, load_fight_store, pilot
 from fightlog.services.rebuild import rebuild_fight
 
 from .utils import FIGHT_DAY_AFTER, FIVE_LOGS, SAMPLE_LOG, fleet_owner, ingest_fixture, make_user, offline
@@ -171,6 +171,38 @@ class FiveLogsTest(TestCase):
             if actor.attributed_to:
                 self.assertNotEqual(actor.attributed_to.name, "Pilot 013")
 
+    def test_pilot_drilldown_adds_up_to_the_pilot_table(self):
+        """The weapons in a pilot's drill-down use the table's rules, whatever the view."""
+        logs = default_active_logs(self.fight)
+        whole = analysis(self.fight, logs, None, 10, False)
+        third = (whole["end"] - whole["start"]) // 3
+        middle = (whole["start"] + third, whole["end"] - third)
+        views = [(None, False, None), (None, True, None), (f"log:{min(logs)}", False, None), (None, False, middle)]
+        checked = 0
+        for perspective, non_ships, window in views:
+            table = analysis(self.fight, logs, perspective, 10, non_ships, window)
+            for row in table["pilots"]:
+                weapons = pilot(self.fight, logs, row["key"], non_ships, perspective, window)["weapons"]
+
+                def total(field, weapons=weapons):
+                    return sum(w[field] for w in weapons)
+
+                label = (perspective, non_ships, window, row["name"])
+                self.assertEqual(total("damage"), row["damage_out"], label)
+                self.assertEqual(total("hits"), row["hits"], label)
+                self.assertEqual(total("misses"), row["misses"], label)
+                self.assertEqual(total("ff"), row["ff_out"], label)
+                self.assertEqual(total("non_ship"), 0 if non_ships else row["non_ship_out"], label)
+                checked += bool(weapons)
+        self.assertGreater(checked, 20)
+        zoomed = analysis(self.fight, logs, None, 10, False, middle)
+        self.assertTrue(middle[0] <= zoomed["start"] <= zoomed["end"] <= middle[1])
+        damage = sum(zoomed["series"]["damage_out"])
+        self.assertTrue(0 < damage < sum(whole["series"]["damage_out"]), damage)
+        listener = next(r for r in analysis(self.fight, logs, None, 10, False)["pilots"] if r["name"] == "Pilot 001")
+        weapons = pilot(self.fight, logs, listener["key"])["weapons"]
+        self.assertTrue(sum(w["ff"] for w in weapons) and sum(w["non_ship"] for w in weapons))
+
     def test_uploading_in_another_order_gives_the_same_sides(self):
         before = {k: v for k, v in corp_sides(self.fight).items()}
         Fight.objects.all().delete()
@@ -218,6 +250,11 @@ class WithKillmailsTest(TestCase):
         self.assertEqual(links.get("20:14:34"), "related")
         self.assertNotIn("20:06:46", links)
         self.assertEqual(links.get("20:28:45"), "core")
+        # The timeline's death markers name the lost ship.
+        kills = analysis(self.fight, default_active_logs(self.fight), None, 10, False)["kills"]
+        sabre = next(k for k in kills if k["role"] == "related")
+        self.assertEqual(sabre["ship"], "Sabre")
+        self.assertTrue(all(k["ship"] and k["url"].startswith("https://zkillboard.com/kill/") for k in kills))
 
     def test_friendly_fire_capsule_loss(self):
         link = FightKillmail.objects.select_related("killmail", "victim_participant__side").get(

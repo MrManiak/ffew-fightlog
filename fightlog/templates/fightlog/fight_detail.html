@@ -70,8 +70,16 @@
             </div>
             <div class="ms-auto small text-body-secondary" id="analysis-status"></div>
         </div>
+        <div id="zoom-bar" hidden>
+            <div class="alert alert-info d-flex align-items-center gap-2 py-1 px-2 mb-2 small">
+                <span id="zoom-text"></span>
+                <button type="button" class="btn btn-sm btn-light ms-auto" id="zoom-reset">{% translate "Show the whole fight" %}</button>
+            </div>
+        </div>
+        <div class="d-flex flex-wrap align-items-stretch column-gap-2 row-gap-1 mb-2" id="totals" aria-live="polite"></div>
         <div class="fightlog-chart"><canvas id="timeline" aria-label="Timeline" role="img"></canvas></div>
-        <div class="small text-body-secondary mt-1">{% translate "Click a point on the chart to see the events in that bucket." %}</div>
+        <div class="small text-body-secondary mt-1" id="death-legend" hidden></div>
+        <div class="small text-body-secondary mt-1">{% translate "Click a point on the chart to see the events in that bucket. Drag across the chart to zoom the whole page into that time window." %}</div>
     </div>
 </div>
 
