@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Entries say when the **parser** changed. After upgrading to such a version, run `python manage.py fightlog_reparse` (see [install.md](docs/install.md#upgrading)).
 
+## [0.2.0] - 2026-10-26
+
+The fight page's timeline grows into the main tool for a post-mortem. The parser is unchanged (version 1), so no re-parse is needed. Type catalog from SDE build 3650286.
+
+### Added
+
+- **Time-window zoom.** Drag across the fight timeline to narrow the whole page to that stretch of the fight: chart, per-side tables, targets and pilot drill-downs. The window is kept in the URL (`from`/`to`), so a zoomed view can be shared. *Show the whole fight* resets it.
+- **Deaths on the timeline.** Each killmail is a marker along the bottom of the chart: a circle for our losses, a diamond for theirs. Hovering a marker shows who lost what, the ISK value and a guide line through the chart; clicking it opens the killmail on zKillboard. Deaths seconds apart stack upwards, and ship names appear when zoomed in far enough to fit them.
+- **Totals above the timeline:** damage, reps, neut/nos, cap transfers (when there are any), jams and tackle, out and in, plus friendly fire. They follow the perspective, the log toggles and the time window.
+
+### Fixed
+
+- The timeline's "Neut/nos" lines left out nosferatu drain. They now add it to the neutralized GJ, as their label says.
+- **Pilot drill-down numbers now match the pilot table.** The drill-down's weapon damage, hits and misses follow the table's rules, including the drones/missiles toggle and the log view. Friendly fire, hits on drones and missiles, and hits on NPCs are shown in separate columns, with a total row.
+- **Dev stack only:** characters seeded in `dev/` are no longer removed every 4 hours by Alliance Auth's ownership check.
+
 ## [0.1.0] - 2026-10-26
 
 First release. Parser version 1, type catalog from SDE build 3646012.
@@ -61,4 +77,5 @@ Every release:
 3. If the parser changed, bump `PARSER_VERSION` in `fightlog/parser/__init__.py` and say so in this file.
 4. Bump `__version__` in `fightlog/__init__.py`, date the section above, and tag `vX.Y.Z`. CI publishes the tag to PyPI through trusted publishing.
 
+[0.2.0]: https://github.com/MrManiak/ffew-fightlog/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MrManiak/ffew-fightlog/releases/tag/v0.1.0

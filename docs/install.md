@@ -18,7 +18,7 @@ pip install ffew-fightlog
 **Docker install** (AA's [custom image](https://allianceauth.readthedocs.io/en/latest/installation-containerized/docker.html#using-a-custom-docker-image) setup): add this line to `conf/requirements.txt`. The image is rebuilt in step 3.
 
 ```
-ffew-fightlog==0.1.0
+ffew-fightlog==0.2.0
 ```
 
 ## 2. Settings
