@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Entries say when the **parser** changed. After upgrading to such a version, run `python manage.py fightlog_reparse` (see [install.md](docs/install.md#upgrading)).
 
+## [Unreleased]
+
+### Fixed
+
+- Lines switched off in the timeline's legend came back on whenever the chart was redrawn: on zooming, changing the perspective or bucket size, or toggling a log. They now stay off until switched back on or the page is reloaded.
+
 ## [0.2.0] - 2026-10-26
 
 The fight page's timeline grows into the main tool for a post-mortem. The parser is unchanged (version 1), so no re-parse is needed. Type catalog from SDE build 3650286.
