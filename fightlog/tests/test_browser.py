@@ -11,6 +11,7 @@ The pages load Bootstrap, Chart.js and DataTables from their CDNs, as Alliance A
 """
 
 import os
+import threading
 from unittest import mock, skipUnless
 
 from django.conf import settings
@@ -73,10 +74,23 @@ SERIES_OFF_JS = """(label) => {
 }"""
 
 
+class OneRequestAtATime(StaticLiveServerTestCase.static_handler):
+    """The live server's threads share one SQLite connection, and two requests saving the session at once trip
+    over each other's savepoints: the page's own fetch against Alliance Auth's notification poll, for one."""
+
+    lock = threading.Lock()
+
+    def __call__(self, environ, start_response):
+        with self.lock:
+            return super().__call__(environ, start_response)
+
+
 # TestCase first: the fight is built once per class, and SQLite's in-memory test database shares its
 # connection with the live server's threads, so they see it inside the class's transaction.
 @skipUnless(sync_playwright, "Playwright is not installed")
 class BrowserTestCase(TestCase, StaticLiveServerTestCase):
+    static_handler = OneRequestAtATime
+
     @classmethod
     def setUpClass(cls):
         # Playwright's sync API keeps an event loop running in this thread, which Django takes for async code.
@@ -117,13 +131,17 @@ class BrowserTestCase(TestCase, StaticLiveServerTestCase):
         self.page = context.new_page()
         self.page.set_default_timeout(30000)
         self.js_errors = []
+        self.failed_responses = []
         self.page.on("pageerror", lambda exc: self.js_errors.append(f"pageerror: {exc}"))
         self.page.on(
             "console", lambda msg: self.js_errors.append(f"console: {msg.text}") if msg.type == "error" else None
         )
+        self.page.on("response", lambda r: self.failed_responses.append(r) if r.status >= 400 else None)
 
     def tearDown(self):
-        self.assertEqual(self.js_errors, [])
+        # The console's "Failed to load resource" doesn't say which one.
+        failed = [f"HTTP {r.status} {r.url}: {r.text()[:300]}" for r in self.failed_responses]
+        self.assertEqual(self.js_errors + failed, [])
 
     def open_fight(self):
         self.page.goto(self.live_server_url + self.fight_url)
