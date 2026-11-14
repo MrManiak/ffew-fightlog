@@ -71,9 +71,35 @@ jobs:
           pip install tox
           tox -e py3${{ matrix.python-version }}-django${{ matrix.django-version }}
 
+  browser:
+    runs-on: ubuntu-latest
+    needs: [pre-commit, pylint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install redis
+        uses: shogo82148/actions-setup-redis@v1
+        with:
+          redis-version: latest
+
+      # tox installs Chromium itself; the system libraries it needs take root.
+      - name: Install Chromium's system libraries
+        run: |
+          pip install tox playwright
+          playwright install-deps chromium
+
+      - name: Run browser tests
+        run: tox -e browser
+
   build:
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [test, browser]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
