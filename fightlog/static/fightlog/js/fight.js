@@ -98,6 +98,8 @@
     }
 
     let chart = null;
+    // Series switched off in the chart legend: the chart is rebuilt on every refresh, and they stay off.
+    const hiddenSeries = new Set();
     let lastResult = null;
     let lastDragEnd = 0;
 
@@ -322,20 +324,26 @@
         }
         const labels = result.labels.map(time);
         const series = chartSeries(result);
+        if (chart) {
+            // A series with nothing in this window has no dataset: its entry is left as it was.
+            chart.data.datasets.forEach((dataset, i) => {
+                hiddenSeries[chart.isDatasetVisible(i) ? "delete" : "add"](dataset.key);
+            });
+            chart.destroy();
+        }
         const datasets = SERIES.filter(([key]) => (series[key] || []).some((v) => v)).map(([key, label, color]) => ({
+            key,
             label,
             data: series[key],
             borderColor: color,
             backgroundColor: color,
             yAxisID: COUNT_SERIES.has(key) ? "count" : "amount",
+            hidden: hiddenSeries.has(key),
             tension: 0.2,
             pointRadius: 0,
             pointHitRadius: 6,
             borderWidth: 1.5,
         }));
-        if (chart) {
-            chart.destroy();
-        }
         deaths.list = visibleDeaths(result);
         deaths.hovered = null;
         if (deathTip) {

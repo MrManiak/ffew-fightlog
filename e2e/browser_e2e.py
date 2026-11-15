@@ -203,6 +203,18 @@ def main() -> int:
             "() => { const a = window.fightlog.chart().chartArea; return {left: a.left, right: a.right, top: a.top, bottom: a.bottom}; }"
         )
         box = page.locator("#timeline").bounding_box()
+        # A series switched off in the legend first: it has to stay off through the zoom.
+        legend = page.evaluate(
+            "() => { const c = window.fightlog.chart(); const b = c.legend.legendHitBoxes[0];"
+            " return {label: c.data.datasets[0].label, x: b.left + b.width / 2, y: b.top + b.height / 2}; }"
+        )
+        page.mouse.click(box["x"] + legend["x"], box["y"] + legend["y"])
+        series_off_js = (
+            "(label) => { const c = window.fightlog.chart(); const i = c.data.datasets.findIndex((d) => d.label === label);"
+            " return i >= 0 && !c.isDatasetVisible(i); }"
+        )
+        page.wait_for_timeout(200)  # Chart.js handles the click a frame later
+        off_before = page.evaluate(series_off_js, legend["label"])
         y = box["y"] + (area["top"] + area["bottom"]) / 2
         x0 = box["x"] + area["left"] + (area["right"] - area["left"]) * 0.55
         x1 = box["x"] + area["left"] + (area["right"] - area["left"]) * 0.8
@@ -237,6 +249,11 @@ def main() -> int:
             and page.locator("#drill-modal.show").count() == 0,
             f"{zoomed['labels']} of {full['labels']} buckets, damage {zoomed['damage']:,} of {full['damage']:,}; "
             + page.inner_text("#zoom-text")[:30],
+        )
+        check(
+            "W25 a series switched off in the legend stays off through the zoom",
+            off_before and page.evaluate(series_off_js, legend["label"]),
+            f"'{legend['label']}' off before the zoom: {off_before}",
         )
         totals = page.evaluate(TOTALS_JS)
         check(

@@ -36,7 +36,10 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[test]"
 DJANGO_SETTINGS_MODULE=testauth.settings_aa5.local python runtests.py fightlog
 tox                                    # the CI matrix, with coverage
+tox -e browser                         # the fight page's JavaScript in headless Chromium
 ```
+
+The browser tests are part of the test suite and are skipped unless Playwright is installed (`pip install playwright && playwright install chromium`). They serve the reference fight from a live test server; the pages load Bootstrap, Chart.js and DataTables from their CDNs, so they need network access.
 
 **Local Alliance Auth.** `dev/` runs AA 5.5 with MariaDB, Redis, a Celery worker and beat. The plugin is mounted from the checkout, so code changes reach `runserver` straight away. Restart the worker after changing tasks or analysis code.
 
