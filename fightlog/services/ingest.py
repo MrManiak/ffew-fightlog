@@ -153,7 +153,11 @@ def process_log(log: CombatLog) -> set[int]:
         log.save()
         return affected
     stores = engagements_for_log(
-        parsed, log.pk, app_settings.FIGHTLOG_ENGAGEMENT_GAP_SECONDS, app_settings.FIGHTLOG_MIN_PVP_EVENTS
+        parsed,
+        log.pk,
+        app_settings.FIGHTLOG_ENGAGEMENT_GAP_SECONDS,
+        app_settings.FIGHTLOG_MIN_PVP_EVENTS,
+        skip_ranges=log.purged_ranges or (),  # fights deleted for good don't come back
     )
     if not stores:
         log.status = CombatLog.Status.NO_PVP

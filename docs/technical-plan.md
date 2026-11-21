@@ -97,17 +97,17 @@ class General(models.Model):
         permissions = (
             ("basic_access", "Can browse fights and upload own logs"),
             ("upload_any_log", "Can upload logs for characters they don't own"),
-            ("curate_fights", "Can edit any fight, delete any log and manage allies"),
+            ("curate_fights", "Can edit and delete any fight, delete any log and manage allies"),
             ("post_to_discord", "Can post fights to Discord"),
         )
 ```
 
 | Model | Key fields | Notes |
 |---|---|---|
-| `CombatLog` | `listener_character_id`, `listener_name`, `session_started_at`, `first_event_at`, `last_event_at`, `sha256` (unique), `raw_gz` Binary, `status` (pending/parsing/parsed/no_pvp/failed/rejected), `purge_after` (no_pvp only), `parser_version`, `warnings` JSON, `context` JSON (fleet, system, reship, clone-jump, kill-notice and w-space events with times), `label_template` JSON (the learned overview-label format, §4.3), `clock_offset` (seconds, estimated), `excluded`, `excluded_reason`, `excluded_by`, `excluded_at` | Unique on `(listener_character_id, session_started_at)`. A longer copy of the same session replaces the stored one (§4.1). |
+| `CombatLog` | `listener_character_id`, `listener_name`, `session_started_at`, `first_event_at`, `last_event_at`, `sha256` (unique), `raw_gz` Binary, `status` (pending/parsing/parsed/no_pvp/failed/rejected), `purge_after` (no_pvp only), `parser_version`, `warnings` JSON, `context` JSON (fleet, system, reship, clone-jump, kill-notice and w-space events with times), `label_template` JSON (the learned overview-label format, §4.3), `clock_offset` (seconds, estimated), `excluded`, `excluded_reason`, `excluded_by`, `excluded_at`, `purged_ranges` JSON (time ranges of purged fights, §4.5) | Unique on `(listener_character_id, session_started_at)`. A longer copy of the same session replaces the stored one (§4.1). |
 | `CombatLogUpload` | `log` FK, `user` FK (`on_delete=SET(get_sentinel_user)`), `uploaded_at`, `original_filename` | The first row is the uploader of record. An identical re-upload adds a row instead of being rejected, so the log shows on every uploader's *My logs*. |
 | `Engagement` | `log` FK, `fight` FK (nullable while being assigned), `start_at`, `end_at`, `event_count`, `actor_keys` JSON (pilot keys seen, used for clustering), `store` Binary (packed events, §5.1), `store_version` | The unit that moves between fights. Splitting a fight can split an engagement into two. |
-| `Fight` | `title`, `title_is_manual`, `start_at`, `end_at`, `system` FK `SolarSystem` (nullable), `system_source` (manual/zkb/log/wspace_unknown), `notes`, `tags` M2M `Tag`, `is_curated` (set by the first `FightChange`), `data_version` (bumped by every ingest, deletion or edit), `built_version` (set when a rebuild finishes), `summary` JSON (for the list page and default view), `zkb_window_start`, `zkb_window_end`, `zkb_checked_at`, `created_at`, `updated_at` | `built_version` is part of every analysis cache key. |
+| `Fight` | `title`, `title_is_manual`, `start_at`, `end_at`, `system` FK `SolarSystem` (nullable), `system_source` (manual/zkb/log/wspace_unknown), `notes`, `tags` M2M `Tag`, `is_curated` (set by the first `FightChange`), `data_version` (bumped by every ingest, deletion or edit), `built_version` (set when a rebuild finishes), `summary` JSON (for the list page and default view), `zkb_window_start`, `zkb_window_end`, `zkb_checked_at`, `deleted_at`, `deleted_by` FK, `deleted_reason`, `purge_after` (all four set only while the fight is marked as deleted, §4.5), `created_at`, `updated_at` | `built_version` is part of every analysis cache key. |
 | `FightRedirect` | `old_id` (PK), `fight` FK | Written when a merge absorbs a fight, so old links and Discord posts still resolve. |
 | `FightData` | OneToOne `fight`, `actors` JSON, `event_count`, `chunk_count` | Rebuilt by `rebuild_fight`. Read by the analysis API. |
 | `FightDataChunk` | `fight_data` FK, `seq`, `store` Binary (merged events with `log_id` and `dup_group` columns, at most `FIGHTLOG_STORE_CHUNK_EVENTS` events, default 100k) | Always chunked, so there is one code path. Each chunk stays far below MariaDB's 16 MB default `max_allowed_packet` (§5.1). |
@@ -121,7 +121,7 @@ class General(models.Model):
 | `FriendlyEntity` | `entity_type` (alliance/corporation), `entity_id`, `name` | Allies such as FFEW Associates or Baba Yagas. Edited on a page that requires `curate_fights`, and in the admin. |
 | `Killmail` | `id` PK, `hash`, `time`, `solar_system_id`, victim `character_id`/`corporation_id`/`alliance_id`/`ship_type_id`, `total_value`, `is_npc`, `is_solo`, `attackers` JSON | A shared cache, reused across fights. `attackers` keeps character, corp, alliance, `ship_type_id`, `weapon_type_id`, `damage_done`, final blow and a computed `aoe_suspect` flag (§5.4). |
 | `FightKillmail` | `fight`, `killmail`, `role` (core/related), `victim_participant` FK (nullable) | |
-| `FightChange` | `fight` FK, `user` FK, `at`, `action` (rename/merge/split/move/side/attribute/exclude/delete_log/system/notes/tags), `details` JSON | The curation history. Its first row also sets `Fight.is_curated`. |
+| `FightChange` | `fight` FK, `user` FK, `at`, `action` (rename/merge/split/move/side/attribute/exclude/delete_log/system/notes/tags/delete/restore), `details` JSON | The curation history. Its first row also sets `Fight.is_curated`. |
 | `DiscordWebhook` | `name`, `url` (unique), `is_enabled`, `notes` | Managed by the admin. |
 | `DiscordPost` | `fight` FK, `webhook` FK, `user` FK, `posted_at`, `status`, `message_id`, `error` | Shows "posted by X", and the UI asks for confirmation before posting the same fight again. On a merge, its rows move to the surviving fight. |
 
@@ -168,7 +168,7 @@ Every task uses `@shared_task` and `get_extension_logger`, passes only IDs as im
 | `link_zkill(fight_id)` | 6 | `QueueOnce` keyed on `fight_id` | Runs §6. If it finds new killmails, it bumps `data_version` and queues `rebuild_fight`. Fights less than 24h old get re-checked at +1h, +6h and +24h, because zKill withholds killmails younger than 5 minutes and pilots post kills late. |
 | `post_fight_to_discord(post_id)` | 3 | `QueueOnce` keyed on `post_id` | Runs §7. On a 429 it retries with `eta=retry_at`. |
 | `reparse_all()` | 8 | `QueueOnce` | Triggered from the admin or `fightlog_reparse` after a parser upgrade. Re-parses every log whose `parser_version` is older than the current one, including `no_pvp` logs still within retention. |
-| `purge_expired_logs()` | 8 | `QueueOnce` | Daily. Deletes `no_pvp` logs past `purge_after`. Scheduled through `CELERYBEAT_SCHEDULE`; `install.md` gives the entry, with `apply_offset: True`. |
+| `purge_expired_logs()` | 8 | `QueueOnce` | Daily. Deletes `no_pvp` logs past `purge_after`, and purges deleted fights past theirs (§4.5). Scheduled through `CELERYBEAT_SCHEDULE`; `install.md` gives the entry, with `apply_offset: True`. |
 
 **Why the `rebuild_fight` settings.** By default, celery-once holds its lock from enqueue until the task *finishes*. So with default options:
 - any upload that lands during a rebuild is silently dropped
@@ -258,6 +258,27 @@ ESI name lookups are **never** used to classify bare names: "Emergent Warden", "
   - It removes the log's engagements.
   - Each affected fight gets a `delete_log` `FightChange`.
   - A fight left with no engagements is deleted if it isn't curated and has no Discord posts. Otherwise it is kept as an empty record.
+
+### 4.5 Deleting fights (`services/deletion.py`)
+
+Added after v0.2.0. Only users with `curate_fights` can delete, restore or purge a fight.
+
+- **Deleting** sets `deleted_at`, `deleted_by`, `deleted_reason` and `purge_after` (now + `FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS`, 7) and writes a `delete` `FightChange`. Nothing else changes: the fight keeps its engagements, data and history.
+- **While deleted**, the fight:
+  - is left out of the fight list, unless a curator ticks *Show deleted*
+  - answers 404 on its page and its JSON API for everyone but curators
+  - can't be edited, merged, used as a move target or posted to Discord, and is not checked on zKillboard
+  - is still rebuilt, so that it is current if it is restored
+- **Late logs.** In assignment (§4.4), deleted fights are only considered when no visible fight qualifies. The engagement then joins the deleted fight it shares the most pilots with. Deleted fights are never merged.
+- **Restoring** clears the four fields, writes a `restore` `FightChange` and queues `link_zkill`.
+- **Purging** runs in the daily `purge_expired_logs` task once `purge_after` has passed, or at once when a curator asks for it. It holds the fight's rebuild lock and the clustering lock, and inside one transaction:
+  - deletes every log whose engagements all belong to this fight
+  - for a log another fight also uses, deletes only this fight's engagements and adds their `[start, end]` to the log's `purged_ranges`
+  - deletes the fight, which cascades to its data, participants, history, redirects and Discord posts
+
+  A fight that is being rebuilt is skipped until the next run.
+- **Re-parsing** a log leaves out the events inside its `purged_ranges` before splitting it into engagements, so a purged fight can't come back from a shared log. A purged log that is uploaded again is a new log and creates the fight anew.
+- **Rebuilds** save only the columns they compute (`REBUILT_FIELDS`). A rebuild works on a copy of the fight loaded when it started, and saving every column would undo a delete or restore made while it ran.
 
 ## 5. Analysis
 
@@ -431,6 +452,8 @@ Every page extends `fightlog/base.html`, which extends `allianceauth/base-bs5.ht
 | `fightlog/api/fight/<id>/events/` | Drill-down JSON. |
 | `fightlog/fight/<id>/edit/<action>/` | Curation POSTs: <ul><li>rename, notes and tags, system</li><li>side assignment (one participant or a whole group), side rename</li><li>attribute an unknown actor to a pilot</li><li>exclude or include a log, delete a log</li><li>split, merge, move an engagement</li></ul>Allowed for contributors (users with a log in the fight) and anyone with `curate_fights`. A merge needs edit rights on both fights. Every action writes a `FightChange`. |
 | `fightlog/fight/<id>/discord/` | Discord post (requires `post_to_discord`). |
+| `fightlog/fight/<id>/delete/`, `…/restore/`, `…/purge/` | Fight deletion POSTs (§4.5). All require `curate_fights`. |
+| `fightlog/fights/bulk/` | Deletes or restores the fights ticked in the fight list (requires `curate_fights`). |
 | `fightlog/upload/`, `fightlog/api/logs/`, `fightlog/api/logs/<id>/` | Upload page (with the date-range filter), upload endpoint, status and delete. |
 | `fightlog/my-logs/` | Logs the user uploaded, or whose listener is one of their characters, with status and delete. |
 | `fightlog/friendlies/` | `FriendlyEntity` editor (requires `curate_fights`). |
@@ -443,6 +466,7 @@ Every page extends `fightlog/base.html`, which extends `allianceauth/base-bs5.ht
 | `FIGHTLOG_MAX_UPLOAD_MB` | 25 |
 | `FIGHTLOG_UPLOAD_DEFAULT_DAYS` | 3 |
 | `FIGHTLOG_NO_PVP_RETENTION_DAYS` | 30 |
+| `FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS` | 7 |
 | `FIGHTLOG_FRIENDLY_LABEL` | `""` (derived from the friendly side's largest alliance ticker) |
 | `FIGHTLOG_ENGAGEMENT_GAP_SECONDS` | 300 |
 | `FIGHTLOG_MERGE_TOLERANCE_SECONDS` | 120 |

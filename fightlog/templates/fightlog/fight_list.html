@@ -1,5 +1,5 @@
 {% extends "fightlog/base.html" %}
-{% load i18n fightlog %}
+{% load i18n static fightlog %}
 
 {% block fightlog_content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
@@ -18,6 +18,9 @@
         <div class="col-12 col-md-3"><label class="form-label" for="f-text">{{ form.text.label }}</label><input id="f-text" class="form-control form-control-sm" name="text" value="{{ form.text.value|default_if_none:'' }}"></div>
         <div class="col-6 col-md-2"><label class="form-label" for="f-min">{{ form.min_pilots.label }}</label><input id="f-min" class="form-control form-control-sm" type="number" min="0" name="min_pilots" value="{{ form.min_pilots.value|default_if_none:'' }}"></div>
         <div class="col-6 col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="ours" id="f-ours" {% if form.ours.value %}checked{% endif %}><label class="form-check-label" for="f-ours">{{ form.ours.label }}</label></div></div>
+        {% if can_curate %}
+        <div class="col-6 col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="deleted" id="f-deleted" {% if form.deleted.value %}checked{% endif %}><label class="form-check-label" for="f-deleted">{{ form.deleted.label }}</label></div></div>
+        {% endif %}
         <div class="col-12 col-md-2 d-flex align-items-end gap-2">
             <button class="btn btn-sm btn-secondary" type="submit">{% translate "Search" %}</button>
             <a class="btn btn-sm btn-link" href="{% url 'fightlog:index' %}">{% translate "Clear" %}</a>
@@ -26,10 +29,22 @@
 </form>
 
 {% if rows %}
+{% if can_curate %}
+<form method="post" action="{% url 'fightlog:bulk' %}" id="bulk-form" class="d-flex flex-wrap align-items-center gap-2 mb-2"
+      data-confirm-delete="{% translate 'Delete the selected fights? They can be restored until their logs are deleted.' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <span class="small text-body-secondary" id="bulk-count" aria-live="polite">{% translate "Tick fights to delete or restore them." %}</span>
+    <input class="form-control form-control-sm w-auto" name="reason" maxlength="255" placeholder="{% translate 'Reason (optional)' %}" aria-label="{% translate 'Reason for deleting' %}">
+    <button class="btn btn-sm btn-outline-danger" type="submit" name="action" value="delete" id="bulk-delete" disabled>{% translate "Delete selected" %}</button>
+    {% if show_deleted %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="action" value="restore" id="bulk-restore" disabled>{% translate "Restore selected" %}</button>{% endif %}
+</form>
+{% endif %}
 <div class="table-responsive">
 <table class="table table-sm table-hover align-middle" id="fight-table">
     <thead>
         <tr>
+            {% if can_curate %}<th><input class="form-check-input" type="checkbox" id="bulk-all" aria-label="{% translate 'Select every fight on this page' %}"></th>{% endif %}
             <th>{% translate "Date (EVE)" %}</th>
             <th>{% translate "Fight" %}</th>
             <th>{% translate "System" %}</th>
@@ -41,10 +56,15 @@
     <tbody>
     {% for row in rows %}
         <tr>
+            {% if can_curate %}<td><input class="form-check-input bulk-check" type="checkbox" name="fights" value="{{ row.fight.pk }}" form="bulk-form" data-deleted="{{ row.fight.is_deleted|yesno:'1,0' }}" aria-label="{% translate 'Select this fight' %}"></td>{% endif %}
             <td class="text-nowrap">{{ row.fight.start_at|date:"Y-m-d H:i" }}</td>
             <td><a href="{{ row.fight.get_absolute_url }}">{{ row.fight.title }}</a>
                 {% for tag in row.fight.tags.all %}<span class="badge text-bg-secondary ms-1">#{{ tag.name }}</span>{% endfor %}
                 {% if not row.fight.is_built %}<span class="badge text-bg-warning ms-1">{% translate "processing" %}</span>{% endif %}
+                {% if row.fight.is_deleted %}
+                    <span class="badge text-bg-danger ms-1">{% translate "deleted" %}</span>
+                    <div class="small text-body-secondary">{% blocktranslate with who=row.fight.deleted_by.username|default:"someone" when=row.fight.deleted_at|date:"Y-m-d H:i" until=row.fight.purge_after|date:"Y-m-d H:i" %}Deleted by {{ who }} on {{ when }}. Gone for good after {{ until }}.{% endblocktranslate %}{% if row.fight.deleted_reason %} {% translate "Reason" %}: {{ row.fight.deleted_reason }}{% endif %}</div>
+                {% endif %}
             </td>
             <td>{% if row.fight.system %}{{ row.fight.system.name }}{% elif row.fight.system_source == "wspace_unknown" %}<span class="text-body-secondary">J-space</span>{% else %}<span class="text-body-secondary">?</span>{% endif %}</td>
             <td class="text-nowrap">{{ row.fight.duration_seconds|duration }}</td>
@@ -67,4 +87,8 @@
 {% else %}
 <div class="alert alert-info">{% translate "No fights yet. Upload your gamelogs to create one." %}</div>
 {% endif %}
+{% endblock %}
+
+{% block fightlog_js %}
+    {% if can_curate %}<script src="{% static 'fightlog/js/list.js' %}"></script>{% endif %}
 {% endblock %}

@@ -10,6 +10,6 @@ class General(models.Model):
         permissions = (
             ("basic_access", "Can browse fights and upload own logs"),
             ("upload_any_log", "Can upload logs for characters they don't own"),
-            ("curate_fights", "Can edit any fight, delete any log and manage allies"),
+            ("curate_fights", "Can edit and delete any fight, delete any log and manage allies"),
             ("post_to_discord", "Can post fights to Discord"),
         )

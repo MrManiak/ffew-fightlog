@@ -41,6 +41,9 @@ class CombatLog(models.Model):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     excluded_at = models.DateTimeField(null=True, blank=True)
+    # [start, end] epoch pairs on this log's clock. Their fights were deleted for good while the
+    # log stayed for another fight, so those stretches are never turned into engagements again.
+    purged_ranges = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

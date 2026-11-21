@@ -32,7 +32,7 @@ INSTALLED_APPS += [
     "fightlog",
 ]
 
-# ffew-fightlog: delete hidden no-PvP logs once their retention period is over.
+# ffew-fightlog: delete hidden no-PvP logs and deleted fights once their retention period is over.
 CELERYBEAT_SCHEDULE["fightlog_purge_expired_logs"] = {
     "task": "fightlog.tasks.purge_expired_logs",
     "schedule": crontab(minute=17, hour=4),
@@ -90,7 +90,7 @@ Every permission sits under *fightlog | general* in the admin. Assign them to st
 |---|---|---|
 | `basic_access` — Can browse fights and upload own logs | The Member state | The menu item; browsing and searching every fight; uploading logs of their own characters; deleting their own uploads; editing fights they contributed a log to |
 | `upload_any_log` — Can upload logs for characters they don't own | FCs | Uploading logs collected from fleet members or allies |
-| `curate_fights` — Can edit any fight, delete any log and manage allies | FCs, directors | Editing any fight, excluding logs for everyone, deleting any log, the *Allies* page |
+| `curate_fights` — Can edit and delete any fight, delete any log and manage allies | FCs, directors | Editing any fight, excluding logs for everyone, deleting any log, deleting and restoring fights, the *Allies* page |
 | `post_to_discord` — Can post fights to Discord | Directors, admins | The *Post to Discord* button. Nothing is ever posted automatically |
 
 A log for a character nobody in the Auth owns is accepted from `upload_any_log` users, but it never makes its listener's side friendly.
@@ -149,6 +149,7 @@ All optional. Set them in `local.py`.
 | `FIGHTLOG_MAX_UPLOAD_MB` | `25` | Largest gamelog accepted, in MB |
 | `FIGHTLOG_UPLOAD_DEFAULT_DAYS` | `3` | Default session date range on the upload page |
 | `FIGHTLOG_NO_PVP_RETENTION_DAYS` | `30` | How long logs without PvP are kept (hidden) before the daily purge deletes them |
+| `FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS` | `7` | How long a deleted fight can be restored before the daily purge deletes it and its logs for good. Applies to fights deleted from then on |
 | `FIGHTLOG_FRIENDLY_LABEL` | `""` | Our side's name in fight titles. Empty: its largest alliance ticker |
 | `FIGHTLOG_ENGAGEMENT_GAP_SECONDS` | `300` | A quiet gap longer than this starts a new engagement |
 | `FIGHTLOG_MERGE_TOLERANCE_SECONDS` | `120` | How far apart two engagements may be and still join one fight |
@@ -204,3 +205,12 @@ Then remove `"fightlog"` and the `fightlog_purge_expired_logs` beat entry from `
 ## Data and privacy
 
 Gamelogs contain other players' character names and what happened in each fight. Every member with `basic_access` can see every fight. Members can delete their own uploads at any time. Curators can delete any log. Logs without PvP are hidden, and deleted after `FIGHTLOG_NO_PVP_RETENTION_DAYS`.
+
+Curators can also delete a whole fight, from its page or in bulk from the fight list:
+
+- A deleted fight is hidden at once. Only curators can still open it, or list it with *Show deleted*.
+- For `FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS` a curator can restore it exactly as it was. A log uploaded for it in that time joins it and stays hidden.
+- After that, the daily `purge_expired_logs` task deletes the fight and its logs from the database. A curator can do the same earlier with *Delete for good now*. Neither can be undone.
+- A log that another fight also uses is kept. Only the deleted fight's part of it is removed, and a re-parse does not bring that part back. Its raw text stays stored until the log itself is deleted.
+
+The purge runs once a day, so a fight can outlive its retention by up to a day. Nothing is purged if the beat entry from step 2 is missing.

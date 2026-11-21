@@ -141,13 +141,17 @@
                     setStatus(tr, data.status_label + (data.message ? `: ${data.message}` : ""), kind);
                     tr.cells[3].innerHTML = "";
                     data.fights.forEach((f) => {
-                        const a = document.createElement("a");
-                        a.href = f.url;
-                        a.textContent = f.title + (f.built ? "" : " (building…)");
-                        a.className = "d-block";
-                        tr.cells[3].appendChild(a);
+                        // A deleted fight's page exists only for curators: others get no link.
+                        const el = document.createElement(f.url ? "a" : "span");
+                        if (f.url) {
+                            el.href = f.url;
+                        }
+                        const name = f.title || "A fight";
+                        el.textContent = f.deleted ? `${name} (deleted)` : name + (f.built ? "" : " (building…)");
+                        el.className = f.deleted ? "d-block text-body-secondary" : "d-block";
+                        tr.cells[3].appendChild(el);
                     });
-                    if (data.status !== "parsed" || data.fights.every((f) => f.built)) {
+                    if (data.status !== "parsed" || data.fights.every((f) => f.built || f.deleted)) {
                         counts.done += 1;
                         updateSummary();
                         return;

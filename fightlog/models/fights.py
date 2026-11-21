@@ -39,6 +39,12 @@ class Fight(models.Model):
     zkb_window_start = models.DateTimeField(null=True, blank=True)
     zkb_window_end = models.DateTimeField(null=True, blank=True)
     zkb_checked_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    deleted_reason = models.CharField(max_length=255, blank=True)
+    purge_after = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -51,6 +57,11 @@ class Fight(models.Model):
 
     def get_absolute_url(self) -> str:
         return reverse("fightlog:fight", args=[self.pk])
+
+    @property
+    def is_deleted(self) -> bool:
+        """Marked as deleted: hidden from members until it is restored or purged."""
+        return self.deleted_at is not None
 
     @property
     def duration_seconds(self) -> int:
@@ -219,6 +230,8 @@ class FightChange(models.Model):
         NOTES = "notes", "Edited notes"
         TAGS = "tags", "Edited tags"
         DISCORD = "discord", "Posted to Discord"
+        DELETE = "delete", "Deleted the fight"
+        RESTORE = "restore", "Restored the fight"
 
     fight = models.ForeignKey(Fight, on_delete=models.CASCADE, related_name="changes")
     user = models.ForeignKey(

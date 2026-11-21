@@ -12,11 +12,14 @@ from fightlog import app_settings
 from fightlog.forms import FightSearchForm
 from fightlog.models import DiscordWebhook, Fight, FightRedirect, Participant, Side
 from fightlog.services.analysis import default_side, fight_logs
-from fightlog.services.fights import can_edit
+from fightlog.services.deletion import retention_label
+from fightlog.services.fights import can_curate, can_edit, can_view
 
 
-def _search(form: FightSearchForm):
-    fights = Fight.objects.select_related("system").prefetch_related("tags")
+def _search(form: FightSearchForm, show_deleted: bool = False):
+    fights = Fight.objects.select_related("system", "deleted_by").prefetch_related("tags")
+    if not show_deleted:
+        fights = fights.filter(deleted_at__isnull=True)
     if not form.is_valid():
         return fights
     data = form.cleaned_data
@@ -55,7 +58,10 @@ def _search(form: FightSearchForm):
 @permission_required("fightlog.basic_access")
 def fight_list(request):
     form = FightSearchForm(request.GET or None)
-    fights = _search(form).order_by("-start_at")
+    curator = can_curate(request.user)
+    # Deleted fights are listed only for curators who ask for them.
+    show_deleted = bool(curator and form.is_valid() and form.cleaned_data["deleted"])
+    fights = _search(form, show_deleted).order_by("-start_at")
     page = Paginator(fights, 25).get_page(request.GET.get("page"))
     rows = []
     for fight in page:
@@ -81,7 +87,15 @@ def fight_list(request):
     return render(
         request,
         "fightlog/fight_list.html",
-        {"form": form, "page": page, "rows": rows, "query": query.urlencode()},
+        {
+            "form": form,
+            "page": page,
+            "rows": rows,
+            "query": query.urlencode(),
+            "can_curate": curator,
+            "show_deleted": show_deleted,
+            "next_url": request.get_full_path(),
+        },
     )
 
 
@@ -101,6 +115,8 @@ def fight_detail(request, fight_id: int):
     fight, moved = _get_fight(fight_id)
     if moved:
         return redirect(moved.get_absolute_url(), permanent=True)
+    if not can_view(request.user, fight):
+        raise Http404("No such fight")
     logs = fight_logs(fight)
     for log in logs:
         log.uploader_names = ", ".join(
@@ -120,6 +136,7 @@ def fight_detail(request, fight_id: int):
     pilots = [p for p in participants if p.kind == Participant.Kind.PILOT]
     unknown_actors = [p for p in participants if p.kind == Participant.Kind.SHIP_ONLY and not p.attributed_to_id]
     editable = can_edit(request.user, fight)
+    can_post = request.user.has_perm("fightlog.post_to_discord") and not fight.is_deleted
     default = default_side(fight)
     fight_config = {
         "id": fight.pk,
@@ -142,13 +159,14 @@ def fight_detail(request, fight_id: int):
         "kills": fight.fight_killmails.select_related("killmail", "victim_participant").order_by("killmail__time"),
         "changes": fight.changes.select_related("user")[:50],
         "can_edit": editable,
-        "can_post": request.user.has_perm("fightlog.post_to_discord"),
-        "webhooks": (
-            DiscordWebhook.objects.filter(is_enabled=True) if request.user.has_perm("fightlog.post_to_discord") else []
-        ),
+        "can_curate": can_curate(request.user),
+        "can_post": can_post,
+        "webhooks": DiscordWebhook.objects.filter(is_enabled=True) if can_post else [],
         "discord_posts": fight.discord_posts.select_related("webhook", "user")[:10],
         "other_fights": (
-            Fight.objects.exclude(pk=fight.pk).filter(start_at__lte=fight.end_at, end_at__gte=fight.start_at)[:20]
+            Fight.objects.exclude(pk=fight.pk).filter(
+                deleted_at__isnull=True, start_at__lte=fight.end_at, end_at__gte=fight.start_at
+            )[:20]
             if editable
             else []
         ),
@@ -156,5 +174,6 @@ def fight_detail(request, fight_id: int):
         "side_choices": sides + [Side(pk=0, name="Unknown")],
         "engagements": fight.engagements.select_related("log").order_by("start_at"),
         "settings": {"analysis_cache": app_settings.FIGHTLOG_ANALYSIS_CACHE_SECONDS},
+        "retention": retention_label(),
     }
     return render(request, "fightlog/fight_detail.html", context)

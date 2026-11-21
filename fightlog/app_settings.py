@@ -11,6 +11,11 @@ FIGHTLOG_UPLOAD_DEFAULT_DAYS = clean_setting("FIGHTLOG_UPLOAD_DEFAULT_DAYS", 3, 
 FIGHTLOG_NO_PVP_RETENTION_DAYS = clean_setting("FIGHTLOG_NO_PVP_RETENTION_DAYS", 30, min_value=0, max_value=3650)
 """How long logs without PvP are kept (hidden), so parser upgrades can still find PvP in them."""
 
+FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS = clean_setting(
+    "FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS", 7, min_value=0, max_value=3650
+)
+"""How long a deleted fight can still be restored before it and its logs are deleted for good."""
+
 FIGHTLOG_FRIENDLY_LABEL = clean_setting("FIGHTLOG_FRIENDLY_LABEL", "")
 """Name of our side in fight titles. Empty: the friendly side's largest alliance ticker."""
 

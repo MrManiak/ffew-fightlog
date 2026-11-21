@@ -41,6 +41,10 @@ logger = get_extension_logger(__name__)
 
 PARTY_KINDS = (ActorKind.PILOT, ActorKind.STRUCTURE, ActorKind.DRONE)
 
+# The only fight columns a rebuild writes. A rebuild works on a copy loaded when it started, so
+# saving every column would undo a delete or restore made while it ran.
+REBUILT_FIELDS = ["title", "system", "system_source", "start_at", "end_at", "summary", "built_version", "updated_at"]
+
 
 def _dt(epoch: int) -> datetime:
     return datetime.fromtimestamp(epoch, tz=dt_timezone.utc)
@@ -405,7 +409,7 @@ class FightRebuilder:
             fight.start_at, fight.end_at = _dt(start), _dt(end)
             fight.summary = self._summary(store, logs, offsets, offset_evidence)
             fight.built_version = started_version
-            fight.save()
+            fight.save(update_fields=REBUILT_FIELDS)
         return fight
 
     # persistence helpers ----------------------------------------------------------
@@ -419,7 +423,7 @@ class FightRebuilder:
         fight.participants.all().delete()
         fight.summary = {"empty": True}
         fight.built_version = started_version
-        fight.save()
+        fight.save(update_fields=REBUILT_FIELDS)
         return fight
 
     def _save_sides(self, side_index: dict) -> dict[int, Side]:
