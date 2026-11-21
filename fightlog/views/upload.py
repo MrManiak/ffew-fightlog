@@ -9,6 +9,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from fightlog import app_settings
 from fightlog.models import CombatLog, Fight
 from fightlog.services import curation
+from fightlog.services.fights import can_curate
 from fightlog.services.ingest import accept_upload
 
 
@@ -43,15 +44,21 @@ def upload_api(request):
     return JsonResponse(payload, status=200 if result.ok else 422)
 
 
-def _log_payload(log: CombatLog) -> dict:
-    fights = Fight.objects.filter(engagements__log=log).distinct()
+def _log_payload(log: CombatLog, user) -> dict:
+    curator = can_curate(user)
+    fights = []
+    for fight in Fight.objects.filter(engagements__log=log).distinct():
+        row = {"id": fight.pk, "built": fight.is_built, "deleted": fight.is_deleted}
+        if curator or not fight.is_deleted:  # a deleted fight's page exists only for curators
+            row.update(title=fight.title, url=fight.get_absolute_url())
+        fights.append(row)
     return {
         "id": log.pk,
         "status": log.status,
         "status_label": log.get_status_display(),
         "message": log.status_message,
         "listener": log.listener_name,
-        "fights": [{"id": f.pk, "title": f.title, "url": f.get_absolute_url(), "built": f.is_built} for f in fights],
+        "fights": fights,
     }
 
 
@@ -67,7 +74,7 @@ def log_status(request, log_id: int):
             return JsonResponse({"status": "forbidden"}, status=403)
         curation.delete_log(log, request.user)
         return JsonResponse({"status": "deleted"})
-    return JsonResponse(_log_payload(log))
+    return JsonResponse(_log_payload(log, request.user))
 
 
 def _my_logs(user):
@@ -86,7 +93,7 @@ def my_logs(request):
     logs = list(_my_logs(request.user)[:500])
     for log in logs:
         log.fight_list = list(Fight.objects.filter(engagements__log=log).distinct())
-    return render(request, "fightlog/my_logs.html", {"logs": logs})
+    return render(request, "fightlog/my_logs.html", {"logs": logs, "can_curate": can_curate(request.user)})
 
 
 @login_required

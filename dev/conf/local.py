@@ -47,7 +47,7 @@ INSTALLED_APPS += [
     "fightlog",
 ]
 
-# ffew-fightlog: daily purge of hidden no-PvP logs (docs/install.md).
+# ffew-fightlog: daily purge of hidden no-PvP logs and deleted fights (docs/install.md).
 CELERYBEAT_SCHEDULE["fightlog_purge_expired_logs"] = {
     "task": "fightlog.tasks.purge_expired_logs",
     "schedule": crontab(minute=17, hour=4),

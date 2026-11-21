@@ -25,6 +25,21 @@ def _overlap(fight: Fight, engagement) -> float:
     return (hi - lo).total_seconds()
 
 
+def _qualifying(fights: list[Fight], engagement, keys: set[str], listener_key: str) -> list[tuple[int, Fight]]:
+    """(shared pilot count, fight) for each fight the engagement belongs to."""
+    qualifying = []
+    for fight in fights:
+        fight_keys = _fight_keys(fight)
+        shared = len(keys & fight_keys)
+        if shared or listener_key in fight_keys:
+            qualifying.append((shared, fight))
+    if not qualifying and fights and not keys - {listener_key}:
+        # An observer log (only third-party tackle, no named pilots): join the
+        # overlapping fight it shares the most time with.
+        qualifying = [(0, max(fights, key=lambda f: _overlap(f, engagement)))]
+    return qualifying
+
+
 def assign_log_engagements(log: CombatLog) -> set[int]:
     """Put each unassigned engagement of a log into a fight. Returns affected fight IDs."""
     tolerance = timedelta(seconds=app_settings.FIGHTLOG_MERGE_TOLERANCE_SECONDS)
@@ -34,21 +49,18 @@ def assign_log_engagements(log: CombatLog) -> set[int]:
             for engagement in log.engagements.filter(fight__isnull=True):
                 keys = set(engagement.actor_keys or [])
                 listener_key = f"p:{log.listener_name}"
-                candidates = Fight.objects.filter(
-                    start_at__lte=engagement.end_at + tolerance, end_at__gte=engagement.start_at - tolerance
+                nearby = list(  # already within the merge tolerance
+                    Fight.objects.filter(
+                        start_at__lte=engagement.end_at + tolerance, end_at__gte=engagement.start_at - tolerance
+                    )
                 )
-                qualifying = []
-                for fight in candidates:
-                    fight_keys = _fight_keys(fight)
-                    shared = len(keys & fight_keys)
-                    if shared or listener_key in fight_keys:
-                        qualifying.append((shared, fight))
-                if not qualifying and not keys - {listener_key}:
-                    # An observer log (only third-party tackle, no named pilots): join the
-                    # overlapping fight it shares the most time with.
-                    nearby = list(candidates)  # already within the merge tolerance
-                    if nearby:
-                        qualifying = [(0, max(nearby, key=lambda f, e=engagement: _overlap(f, e)))]
+                qualifying = _qualifying([f for f in nearby if not f.is_deleted], engagement, keys, listener_key)
+                if not qualifying:
+                    # A late log of a deleted fight joins it: it stays hidden and shares its fate.
+                    # Deleted fights are never merged, and never win over a visible fight.
+                    late = _qualifying([f for f in nearby if f.is_deleted], engagement, keys, listener_key)
+                    if late:
+                        qualifying = [max(late, key=lambda sf: (sf[0], -sf[1].pk))]
                 if not qualifying:
                     fight = Fight.objects.create(
                         title=f"Fight {engagement.start_at:%Y-%m-%d %H:%M}",

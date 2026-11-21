@@ -73,8 +73,8 @@ def link_zkill(self, fight_id: int, recheck: int = 0) -> None:
     if not app_settings.FIGHTLOG_ZKB_ENABLED:
         return
     fight = Fight.objects.filter(pk=fight_id).first()
-    if fight is None:
-        return
+    if fight is None or fight.is_deleted:
+        return  # restoring a deleted fight queues this check again
     system_before = (fight.system_id, fight.system_source)
     try:
         new_links = zkb.link_fight(fight)
@@ -127,5 +127,8 @@ def reparse_all() -> int:
 
 @shared_task(base=QueueOnce)
 def purge_expired_logs() -> int:
+    """Daily: delete no-PvP logs past their retention, and deleted fights past theirs. Returns logs deleted."""
+    from fightlog.services.deletion import purge_expired_fights
+
     _, per_model = CombatLog.objects.filter(status=CombatLog.Status.NO_PVP, purge_after__lt=timezone.now()).delete()
-    return per_model.get("fightlog.CombatLog", 0)
+    return per_model.get("fightlog.CombatLog", 0) + purge_expired_fights().logs_deleted

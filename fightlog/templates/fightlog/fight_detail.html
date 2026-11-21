@@ -10,6 +10,26 @@
 {% block fightlog_content %}
 <div id="fight-root" data-fight-id="{{ fight.pk }}">
 
+{% if fight.is_deleted %}
+<div class="card border-danger mb-3" id="deleted-banner">
+<div class="card-body d-flex flex-wrap align-items-center gap-2">
+    <div class="me-auto">
+        <strong class="text-danger">{% translate "This fight is deleted." %}</strong>
+        {% blocktranslate with who=fight.deleted_by.username|default:"someone" when=fight.deleted_at|date:"Y-m-d H:i" %}Deleted by {{ who }} on {{ when }}.{% endblocktranslate %}
+        {% if fight.deleted_reason %}{% translate "Reason" %}: {{ fight.deleted_reason }}{% endif %}
+        <div class="small text-body-secondary">{% blocktranslate with until=fight.purge_after|date:"Y-m-d H:i" %}Only curators can see it. After {{ until }} (EVE time) it is deleted for good, with the logs that only this fight uses.{% endblocktranslate %}</div>
+    </div>
+    <form method="post" action="{% url 'fightlog:restore_fight' fight.pk %}">
+        {% csrf_token %}<button class="btn btn-sm btn-primary" type="submit">{% translate "Restore" %}</button>
+    </form>
+    <form method="post" action="{% url 'fightlog:purge_fight' fight.pk %}">
+        {# Confirm on the click, not on submit: Alliance Auth locks a form at its first submit event, cancelled or not. #}
+        {% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('{% translate "Delete this fight and its logs for good, right now? This cannot be undone." %}');">{% translate "Delete for good now" %}</button>
+    </form>
+</div>
+</div>
+{% endif %}
+
 <div class="card mb-3">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between gap-2">
@@ -228,6 +248,20 @@
                 {% endif %}
             </div>
         </div>
+    </div>
+</div>
+{% endif %}
+
+{% if can_curate and not fight.is_deleted %}
+<div class="card mb-3">
+    <div class="card-header">{% translate "Delete this fight" %}</div>
+    <div class="card-body">
+        <form method="post" action="{% url 'fightlog:delete_fight' fight.pk %}" class="d-flex flex-wrap gap-2 align-items-center" id="delete-form">
+            {% csrf_token %}
+            <input class="form-control form-control-sm w-auto flex-grow-1" name="reason" maxlength="255" placeholder="{% translate 'Reason (optional)' %}" aria-label="{% translate 'Reason for deleting' %}">
+            <button class="btn btn-sm btn-outline-danger" type="submit">{% translate "Delete fight" %}</button>
+        </form>
+        <div class="small text-body-secondary mt-1">{% blocktranslate %}The fight disappears for everyone but curators, who can restore it for {{ retention }}. After that it is deleted for good, with the logs that only this fight uses.{% endblocktranslate %}</div>
     </div>
 </div>
 {% endif %}

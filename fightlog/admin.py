@@ -17,7 +17,8 @@ class FriendlyEntityAdmin(admin.ModelAdmin):
 
 @admin.register(Fight)
 class FightAdmin(admin.ModelAdmin):
-    list_display = ("title", "start_at", "system", "is_curated", "data_version", "built_version")
+    list_display = ("title", "start_at", "system", "is_curated", "data_version", "built_version", "deleted_at")
+    list_filter = (("deleted_at", admin.EmptyFieldListFilter),)
     search_fields = ("title",)
     readonly_fields = ("summary", "data_version", "built_version", "created_at", "updated_at")
     exclude = ("tags",)
@@ -39,7 +40,7 @@ class CombatLogAdmin(admin.ModelAdmin):
     list_filter = ("status", "excluded")
     search_fields = ("listener_name",)
     exclude = ("raw_gz",)
-    readonly_fields = ("sha256", "raw_size", "warnings", "context", "label_template", "clock_offset")
+    readonly_fields = ("sha256", "raw_size", "warnings", "context", "label_template", "clock_offset", "purged_ranges")
     actions = ["reparse"]
 
     @admin.action(description="Re-parse selected logs")

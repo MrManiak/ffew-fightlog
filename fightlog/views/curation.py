@@ -3,14 +3,19 @@ from datetime import timezone as dt_timezone
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.http import HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from fightlog.forms import FriendlyEntityForm
+from fightlog.locks import LockBusy
 from fightlog.models import CombatLog, DiscordPost, DiscordWebhook, Engagement, Fight, FightChange, FriendlyEntity, Side
-from fightlog.services import curation
-from fightlog.services.fights import can_edit, record_change
+from fightlog.services import curation, deletion
+from fightlog.services.fights import can_edit, can_view, record_change
+
+CURATOR_PERMS = ("fightlog.basic_access", "fightlog.curate_fights")
 
 EDIT_ACTIONS = {
     "rename",
@@ -42,6 +47,8 @@ def _parse_dt(value: str) -> datetime | None:
 @require_POST
 def edit(request, fight_id: int, action: str):
     fight = get_object_or_404(Fight, pk=fight_id)
+    if not can_view(request.user, fight):
+        raise Http404("No such fight")
     if action not in EDIT_ACTIONS:
         return HttpResponseForbidden("Unknown action")
     if not can_edit(request.user, fight):
@@ -101,13 +108,96 @@ def edit(request, fight_id: int, action: str):
 def discord_post(request, fight_id: int):
     from fightlog.tasks import post_fight_to_discord
 
-    fight = get_object_or_404(Fight, pk=fight_id)
+    fight = get_object_or_404(Fight, pk=fight_id, deleted_at__isnull=True)
     webhook = get_object_or_404(DiscordWebhook, pk=request.POST.get("webhook"), is_enabled=True)
     post = DiscordPost.objects.create(fight=fight, webhook=webhook, user=request.user)
     record_change(fight, request.user, FightChange.Action.DISCORD, curates=False, webhook=webhook.name)
     post_fight_to_discord.apply_async(args=[post.pk], priority=3)
     messages.info(request, f"Posting to {webhook.name}…")
     return redirect(fight.get_absolute_url())
+
+
+@login_required
+@permission_required(CURATOR_PERMS)
+@require_POST
+def delete_fight(request, fight_id: int):
+    fight = get_object_or_404(Fight, pk=fight_id)
+    if deletion.delete_fight(fight, request.user, request.POST.get("reason", "")):
+        messages.success(
+            request,
+            f"Deleted this fight. It can be restored for {deletion.retention_label()}; "
+            "after that it is deleted for good, with its logs.",
+        )
+    return redirect(fight.get_absolute_url())
+
+
+@login_required
+@permission_required(CURATOR_PERMS)
+@require_POST
+def restore_fight(request, fight_id: int):
+    fight = get_object_or_404(Fight, pk=fight_id)
+    if deletion.restore_fight(fight, request.user):
+        messages.success(request, "Restored this fight.")
+    return redirect(fight.get_absolute_url())
+
+
+@login_required
+@permission_required(CURATOR_PERMS)
+@require_POST
+def purge_fight(request, fight_id: int):
+    """Skip the rest of a deleted fight's retention: delete it and its logs now."""
+    fight = get_object_or_404(Fight, pk=fight_id)
+    if not fight.is_deleted:
+        messages.error(request, "Only a deleted fight can be deleted for good. Delete it first.")
+        return redirect(fight.get_absolute_url())
+    try:
+        result = deletion.purge_fight(fight, request.user)
+    except LockBusy:
+        messages.error(request, "This fight is being processed right now. Try again in a minute.")
+        return redirect(fight.get_absolute_url())
+    if result is None:  # restored in the meantime
+        return redirect(fight.get_absolute_url())
+    kept = (
+        f" {result.logs_trimmed} log{'' if result.logs_trimmed == 1 else 's'} also used by other fights "
+        f"{'was' if result.logs_trimmed == 1 else 'were'} kept."
+        if result.logs_trimmed
+        else ""
+    )
+    logs = f"{result.logs_deleted} log{'' if result.logs_deleted == 1 else 's'}"
+    messages.success(request, f"Deleted “{fight.title}” for good, with {logs}.{kept}")
+    return redirect(reverse("fightlog:index") + "?deleted=on")
+
+
+@login_required
+@permission_required(CURATOR_PERMS)
+@require_POST
+def bulk(request):
+    """Delete or restore the fights ticked in the fight list."""
+    action = request.POST.get("action")
+    if action not in ("delete", "restore"):
+        return HttpResponseForbidden("Unknown action")
+    ids = [int(value) for value in request.POST.getlist("fights") if value.isdigit()]
+    fights = Fight.objects.filter(pk__in=ids)
+    if action == "delete":
+        reason = request.POST.get("reason", "")
+        count = sum(deletion.delete_fight(fight, request.user, reason) for fight in fights)
+        if count:
+            messages.success(
+                request,
+                f"Deleted {count} fight{'' if count == 1 else 's'}. "
+                f"Restoring is possible for {deletion.retention_label()}; "
+                "after that a deleted fight is gone for good, with its logs.",
+            )
+    else:
+        count = sum(deletion.restore_fight(fight, request.user) for fight in fights)
+        if count:
+            messages.success(request, f"Restored {count} fight{'' if count == 1 else 's'}.")
+    if not count:
+        messages.info(request, "No fight was selected." if not ids else "Nothing to do for the selected fights.")
+    target = request.POST.get("next")
+    if target and url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
+        return redirect(target)
+    return redirect("fightlog:index")
 
 
 def _resolve_entity(entity_type: str, identifier: str) -> tuple[int, str, str] | None:
@@ -162,4 +252,4 @@ def friendlies(request):
 @login_required
 @permission_required("fightlog.basic_access")
 def help_page(request):
-    return render(request, "fightlog/help.html")
+    return render(request, "fightlog/help.html", {"retention": deletion.retention_label()})

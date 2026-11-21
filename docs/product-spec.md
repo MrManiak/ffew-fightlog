@@ -97,7 +97,7 @@ This section was checked against about 16,000 local logs (2022–2026), five log
 |---|---|---|
 | `basic_access` | Members | Browse and search all fights. Upload logs whose listener is one of their own characters. Delete logs they uploaded, or whose listener is one of their characters |
 | `upload_any_log` | FCs, leadership | Upload logs for characters they don't own (logs collected from fleet members or allies) |
-| `curate_fights` | FCs, directors | Edit any fight, delete any log, manage the list of allies |
+| `curate_fights` | FCs, directors | Edit any fight, delete any log, delete and restore fights, manage the list of allies |
 | `post_to_discord` | Admins, directors, or a custom group | Post a fight to Discord |
 
 - **Contributors.** Anyone who uploaded a log that is part of a fight can edit that fight. Merging two fights needs edit rights on both.
@@ -268,6 +268,12 @@ This section was checked against about 16,000 local logs (2022–2026), five log
   - set the system
   - edit notes and tags
 - **Curators can also** delete any log and manage the list of allies.
+- **Curators can delete a fight**, with an optional reason, from its page or several at once from the fight list.
+  - The fight is hidden at once: it leaves the fight list, and its links answer *not found* for everyone but curators.
+  - Curators can list deleted fights with *Show deleted*, open them, and restore them exactly as they were. A deleted fight can't be edited, merged or posted to Discord.
+  - A log uploaded for a deleted fight joins it and stays hidden. *My logs* tells uploaders which of their logs are in a deleted fight.
+  - After 7 days (configurable) the fight is deleted for good, with its logs. A curator can do that earlier.
+  - A log that another fight also uses is kept, without the deleted fight's part. Re-parsing it does not bring the fight back.
 - **Each change** records who made it, when, and what changed. That includes log deletions and merges; a merge also records where the absorbed fight now redirects.
 
 ## Metric definitions
@@ -319,6 +325,8 @@ The fight of 2026-10-25 in J-space system 31001176 is the reference. Five of its
 7. **Merging and deleting:**
    - Merging two fights where one has notes keeps the notes, and the absorbed fight's link redirects.
    - Deleting the only log of a curated fight leaves an empty fight with its history.
+   - A deleted fight is not found by members, is listed for curators with *Show deleted*, and comes back unchanged when restored.
+   - Once its retention is over, the fight and the logs only it uses are gone. A log shared with another fight stays, and re-parsing it does not recreate the deleted fight.
 8. **Discord.** With `post_to_discord`, posting produces one message. Without the permission, the button is not shown.
 
 ## Open questions

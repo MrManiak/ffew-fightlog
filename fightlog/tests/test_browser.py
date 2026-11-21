@@ -19,6 +19,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import TestCase
 from django.urls import reverse
 
+from fightlog.models import Fight
 from fightlog.services import zkb
 from fightlog.services.rebuild import rebuild_fight
 
@@ -345,3 +346,88 @@ class FightPageTest(BrowserTestCase):
         page.wait_for_function("window.fightlog.lastResult().window === null")
         page.wait_for_function(READY_JS)
         self.assertFalse(self.series_off(label))
+
+
+class FightListTest(BrowserTestCase):
+    """The curator's tick boxes in the fight list (list.js)."""
+
+    def open_list(self, query: str = ""):
+        self.page.goto(self.live_server_url + reverse("fightlog:index") + query)
+
+    def submit(self, button: str, accept: bool = True):
+        self.page.once("dialog", lambda dialog: dialog.accept() if accept else dialog.dismiss())
+        if not accept:
+            self.page.click(button)
+            return
+        with self.page.expect_navigation():
+            self.page.click(button)
+
+    def test_ticked_fights_are_deleted_and_restored(self):
+        page = self.page
+        self.open_list()
+        boxes = page.locator(".bulk-check")
+        total = boxes.count()
+        self.assertGreater(total, 0)
+        self.assertTrue(page.is_disabled("#bulk-delete"))
+        self.assertEqual(page.locator("#bulk-restore").count(), 0)
+
+        # Ticking enables Delete; the header box follows the rows.
+        boxes.first.check()
+        self.assertTrue(page.is_enabled("#bulk-delete"))
+        self.assertIn("1 selected", page.inner_text("#bulk-count"))
+        boxes.first.uncheck()
+        self.assertTrue(page.is_disabled("#bulk-delete"))
+        page.check("#bulk-all")
+        self.assertEqual(page.locator(".bulk-check:checked").count(), total)
+        self.assertIn(f"{total} selected", page.inner_text("#bulk-count"))
+
+        # Declining the confirmation deletes nothing.
+        page.fill("#bulk-form [name=reason]", "test fleet")
+        self.submit("#bulk-delete", accept=False)
+        self.assertEqual(Fight.objects.filter(deleted_at__isnull=False).count(), 0)
+
+        self.submit("#bulk-delete")
+        self.assertEqual(Fight.objects.filter(deleted_reason="test fleet").count(), total)
+        self.assertEqual(page.locator(".bulk-check").count(), 0)
+        # Said once: Alliance Auth's base template shows the messages, the plugin's must not repeat them.
+        self.assertEqual(page.locator(".alert", has_text=f"Deleted {total} fight").count(), 1)
+
+        # With "Show deleted" they are back in the list, marked, and can only be restored.
+        page.check("#f-deleted")
+        with page.expect_navigation():
+            page.click("#fight-search button[type=submit]")
+        self.assertEqual(page.locator(".bulk-check[data-deleted='1']").count(), total)
+        self.assertIn("test fleet", page.inner_text("#fight-table"))
+        page.check("#bulk-all")
+        self.assertTrue(page.is_disabled("#bulk-delete"))
+        self.assertTrue(page.is_enabled("#bulk-restore"))
+        with page.expect_navigation():
+            page.click("#bulk-restore")  # restoring asks for no confirmation
+        self.assertEqual(Fight.objects.filter(deleted_at__isnull=False).count(), 0)
+        self.assertIn("deleted=on", page.url)
+        self.assertEqual(page.locator(".bulk-check[data-deleted='0']").count(), total)
+
+    def test_delete_restore_and_purge_from_the_fight_page(self):
+        page = self.page
+        page.goto(self.live_server_url + self.fight_url)
+        page.wait_for_function(READY_JS)
+        page.fill("#delete-form [name=reason]", "wrong fight")
+        with page.expect_navigation():
+            page.click("#delete-form button")
+        page.wait_for_function(READY_JS)  # curators still get the whole page
+        self.assertIn("wrong fight", page.inner_text("#deleted-banner"))
+        self.assertEqual(page.locator("#delete-form").count(), 0)
+
+        with page.expect_navigation():
+            page.click("#deleted-banner >> text=Restore")
+        self.assertEqual(page.locator("#deleted-banner").count(), 0)
+        self.assertEqual(Fight.objects.filter(deleted_at__isnull=False).count(), 0)
+
+        with page.expect_navigation():
+            page.click("#delete-form button")
+        fights = Fight.objects.count()
+        self.submit("#deleted-banner >> text=Delete for good now", accept=False)
+        self.assertEqual(Fight.objects.count(), fights)
+        self.submit("#deleted-banner >> text=Delete for good now")
+        self.assertEqual(Fight.objects.count(), fights - 1)
+        self.assertEqual(page.locator(".alert", has_text="for good").count(), 1)

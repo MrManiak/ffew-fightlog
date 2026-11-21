@@ -53,4 +53,16 @@
         </ul>
     </div>
 </div>
+
+<div class="card mb-3">
+    <div class="card-header">{% translate "Deleted fights" %}</div>
+    <div class="card-body small">
+        <ul class="mb-0">
+            <li>A curator can delete a fight. It disappears at once from the fight list, and its links stop working for everyone but curators.</li>
+            <li>For {{ retention }} a curator can still restore it exactly as it was. After that it is deleted for good, together with its logs.
+                A log that another fight also uses is kept, without the deleted fight's part.</li>
+            <li>A log uploaded for a deleted fight joins it and stays hidden with it. <em>My logs</em> shows which of your logs are in a deleted fight.</li>
+        </ul>
+    </div>
+</div>
 {% endblock %}

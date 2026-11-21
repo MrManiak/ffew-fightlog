@@ -11,6 +11,7 @@ class FightSearchForm(forms.Form):
     text = forms.CharField(required=False, max_length=100, label="Title, notes or tag")
     min_pilots = forms.IntegerField(required=False, min_value=0, label="Min. pilots")
     ours = forms.BooleanField(required=False, label="Our side involved")
+    deleted = forms.BooleanField(required=False, label="Show deleted")
 
 
 class FriendlyEntityForm(forms.Form):

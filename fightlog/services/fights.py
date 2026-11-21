@@ -33,9 +33,20 @@ def record_change(fight: Fight, user, action: str, curates: bool = True, **detai
     return change
 
 
+def can_curate(user) -> bool:
+    """Curators delete, restore and purge fights, and are the only ones who see deleted fights."""
+    return user.is_authenticated and user.has_perm("fightlog.basic_access") and user.has_perm("fightlog.curate_fights")
+
+
+def can_view(user, fight: Fight) -> bool:
+    return not fight.is_deleted or can_curate(user)
+
+
 def can_edit(user, fight: Fight) -> bool:
     if not user.is_authenticated or not user.has_perm("fightlog.basic_access"):
         return False
+    if fight.is_deleted:
+        return False  # restore it first
     if user.has_perm("fightlog.curate_fights"):
         return True
     return fight.engagements.filter(log__uploads__user=user).exists()

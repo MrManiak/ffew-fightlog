@@ -5,11 +5,12 @@ from django.views.decorators.http import require_GET
 from fightlog.models import Fight
 from fightlog.parser import Kind
 from fightlog.services import analysis as analysis_service
+from fightlog.services.fights import can_view
 
 
-def _fight(fight_id: int) -> Fight:
+def _fight(request, fight_id: int) -> Fight:
     fight = Fight.objects.filter(pk=fight_id).first()
-    if fight is None:
+    if fight is None or not can_view(request.user, fight):
         raise Http404("No such fight")
     return fight
 
@@ -39,7 +40,7 @@ def _window(request) -> tuple[int, int] | None:
 @permission_required("fightlog.basic_access")
 @require_GET
 def analysis(request, fight_id: int):
-    fight = _fight(fight_id)
+    fight = _fight(request, fight_id)
     logs = analysis_service.parse_logs_param(fight, request.GET.get("logs"))
     bucket = _int(request.GET.get("bucket"), 10, 5, 60)
     if bucket not in (5, 10, 30, 60):
@@ -61,7 +62,7 @@ def analysis(request, fight_id: int):
 @permission_required("fightlog.basic_access")
 @require_GET
 def events(request, fight_id: int):
-    fight = _fight(fight_id)
+    fight = _fight(request, fight_id)
     logs = analysis_service.parse_logs_param(fight, request.GET.get("logs"))
     start = _int(request.GET.get("start"), 0, 0, 2**31 - 1)
     end = _int(request.GET.get("end"), 2**31 - 1, 0, 2**31 - 1)
@@ -90,7 +91,7 @@ def events(request, fight_id: int):
 @permission_required("fightlog.basic_access")
 @require_GET
 def pilot(request, fight_id: int):
-    fight = _fight(fight_id)
+    fight = _fight(request, fight_id)
     key = request.GET.get("key")
     if not key:
         raise Http404("key required")
@@ -106,7 +107,7 @@ def pilot(request, fight_id: int):
 @permission_required("fightlog.basic_access")
 @require_GET
 def fight_status(request, fight_id: int):
-    fight = _fight(fight_id)
+    fight = _fight(request, fight_id)
     return JsonResponse(
         {"built": fight.is_built, "data_version": fight.data_version, "built_version": fight.built_version}
     )

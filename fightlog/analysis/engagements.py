@@ -59,8 +59,11 @@ def pilot_keys(store: EventStore) -> list[str]:
     return sorted({a["key"] for a in store.actors if a["key"].startswith("p:")})
 
 
-def engagements_for_log(parsed: ParsedLog, log_id: int, gap_seconds: int, min_events: int) -> list[EventStore]:
-    return [
-        build_store(group, log_id, parsed.listener)
-        for group in split_engagements(parsed.events, gap_seconds, min_events)
-    ]
+def engagements_for_log(
+    parsed: ParsedLog, log_id: int, gap_seconds: int, min_events: int, skip_ranges=()
+) -> list[EventStore]:
+    """``skip_ranges``: [start, end] epoch pairs (inclusive) whose events are left out."""
+    events = parsed.events
+    if skip_ranges:
+        events = [e for e in events if not any(lo <= e.t <= hi for lo, hi in skip_ranges)]
+    return [build_store(group, log_id, parsed.listener) for group in split_engagements(events, gap_seconds, min_events)]

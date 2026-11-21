@@ -124,6 +124,23 @@ jobs:
           name: dist
           path: dist/
 
+  # The one check the ruleset on master requires, so that the ruleset doesn't have to name the
+  # matrix jobs. It runs even when a job before it failed: GitHub counts a skipped required
+  # check as passed, and every job after a failed one is skipped.
+  ci-passed:
+    if: always()
+    needs: [pre-commit, pylint, test, browser, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every job before this one succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = "success" ] || exit 1
+          done
+
   deploy-pypi:
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/')

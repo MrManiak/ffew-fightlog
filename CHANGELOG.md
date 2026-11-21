@@ -6,8 +6,27 @@ Entries say when the **parser** changed. After upgrading to such a version, run 
 
 ## [Unreleased]
 
+The parser is unchanged (version 1), so no re-parse is needed. This version has a database migration.
+
+### Added
+
+- **Deleting fights.** Users with `curate_fights` can delete a fight from its page, with an optional reason, or tick several in the fight list and delete them at once.
+  - A deleted fight disappears from the fight list at once, and its links answer *not found* for everyone but curators.
+  - Curators can tick *Show deleted* in the fight list to see deleted fights, open them, and restore them exactly as they were.
+  - After 7 days the daily clean-up task deletes the fight for good, with its logs. The new setting `FIGHTLOG_DELETED_FIGHT_RETENTION_DAYS` changes how long that is. A curator can also delete a deleted fight for good right away.
+  - A log that another fight also uses is kept, without the deleted fight's part. Re-parsing it does not bring the fight back.
+  - A log uploaded for a deleted fight joins it and stays hidden. *My logs* and the upload page say when a log is in a deleted fight.
+- The `curate_fights` permission is now labelled "Can edit and delete any fight, delete any log and manage allies".
+
+### Changed
+
+- The daily `purge_expired_logs` task now also purges deleted fights. The beat entry from [install.md](docs/install.md) stays as it is.
+
 ### Fixed
 
+- Every confirmation and error message was shown twice at the top of the page: once by Alliance Auth and once by the plugin.
+- On *My logs*, declining the "Delete this log for everyone?" confirmation left that log's *Delete* button dead until the page was reloaded.
+- Notes saved while a fight was being rebuilt could be lost when the rebuild finished. Rebuilds now save only what they compute.
 - Lines switched off in the timeline's legend came back on whenever the chart was redrawn: on zooming, changing the perspective or bucket size, or toggling a log. They now stay off until switched back on or the page is reloaded.
 
 ## [0.2.0] - 2026-10-26
@@ -81,7 +100,8 @@ Every release:
 1. Rebuild the type catalog from the current SDE (`python tools/build_type_catalog.py`) and commit it. CI checks that it loads.
 2. If Alliance Auth was upgraded, compare `ESI_COMPATIBILITY_DATE` in `fightlog/providers.py` with AA's own (`__esi_compatibility_date__` in `allianceauth/eveonline/__init__.py`).
 3. If the parser changed, bump `PARSER_VERSION` in `fightlog/parser/__init__.py` and say so in this file.
-4. Bump `__version__` in `fightlog/__init__.py`, date the section above, and tag `vX.Y.Z`. CI publishes the tag to PyPI through trusted publishing.
+4. Bump `__version__` in `fightlog/__init__.py` and date the section above. Like every change, this reaches `master` through a pull request whose `ci-passed` check is green; `master` takes no direct pushes.
+5. Tag `vX.Y.Z` on `master`. CI publishes the tag to PyPI through trusted publishing.
 
 [0.2.0]: https://github.com/MrManiak/ffew-fightlog/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MrManiak/ffew-fightlog/releases/tag/v0.1.0

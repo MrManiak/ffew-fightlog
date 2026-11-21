@@ -22,11 +22,7 @@
 
 {% block content %}
     <div class="fightlog">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} py-2">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
+        {# No message list here: Alliance Auth's base template already shows them above the content. #}
         {% block fightlog_content %}{% endblock %}
         <p class="text-body-secondary small mt-4 mb-0 fightlog-footer">
             EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide.

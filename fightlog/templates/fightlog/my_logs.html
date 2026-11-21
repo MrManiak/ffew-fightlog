@@ -17,10 +17,14 @@
             <td>{{ log.listener_name }}</td>
             <td>{{ log.get_status_display }}{% if log.status_message %} <span class="small text-body-secondary">— {{ log.status_message }}</span>{% endif %}
                 {% if log.status == "no_pvp" and log.purge_after %}<span class="small text-body-secondary">({% translate "kept until" %} {{ log.purge_after|date:"Y-m-d" }})</span>{% endif %}</td>
-            <td>{% for f in log.fight_list %}<a class="d-block" href="{{ f.get_absolute_url }}">{{ f.title }}</a>{% endfor %}</td>
+            <td>{% for f in log.fight_list %}
+                {% if not f.is_deleted %}<a class="d-block" href="{{ f.get_absolute_url }}">{{ f.title }}</a>
+                {% else %}<span class="d-block small text-body-secondary">{% if can_curate %}<a href="{{ f.get_absolute_url }}">{{ f.title }}</a> — {% endif %}{% blocktranslate with until=f.purge_after|date:"Y-m-d" %}in a deleted fight, gone for good after {{ until }}{% endblocktranslate %}</span>{% endif %}
+            {% endfor %}</td>
             <td class="text-end">
-                <form method="post" action="{% url 'fightlog:delete_log' log.pk %}" onsubmit="return confirm('{% translate "Delete this log for everyone?" %}');">
-                    {% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">{% translate "Delete" %}</button>
+                <form method="post" action="{% url 'fightlog:delete_log' log.pk %}">
+                    {# Confirm on the click, not on submit: Alliance Auth locks a form at its first submit event, cancelled or not. #}
+                    {% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('{% translate "Delete this log for everyone?" %}');">{% translate "Delete" %}</button>
                 </form>
             </td>
         </tr>
