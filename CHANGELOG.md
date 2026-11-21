@@ -100,7 +100,8 @@ Every release:
 1. Rebuild the type catalog from the current SDE (`python tools/build_type_catalog.py`) and commit it. CI checks that it loads.
 2. If Alliance Auth was upgraded, compare `ESI_COMPATIBILITY_DATE` in `fightlog/providers.py` with AA's own (`__esi_compatibility_date__` in `allianceauth/eveonline/__init__.py`).
 3. If the parser changed, bump `PARSER_VERSION` in `fightlog/parser/__init__.py` and say so in this file.
-4. Bump `__version__` in `fightlog/__init__.py`, date the section above, and tag `vX.Y.Z`. CI publishes the tag to PyPI through trusted publishing.
+4. Bump `__version__` in `fightlog/__init__.py` and date the section above. Like every change, this reaches `master` through a pull request whose `ci-passed` check is green; `master` takes no direct pushes.
+5. Tag `vX.Y.Z` on `master`. CI publishes the tag to PyPI through trusted publishing.
 
 [0.2.0]: https://github.com/MrManiak/ffew-fightlog/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MrManiak/ffew-fightlog/releases/tag/v0.1.0
