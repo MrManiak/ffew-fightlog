@@ -337,6 +337,7 @@ class AggregateTest(TestCase):
             {"key": "s:1:friendly_act:Loki", "kind": "ship_only", "ship": "Loki"},
             {"key": "c:X:HAM", "kind": "charge"},
             {"key": "n:Rat", "kind": "npc"},
+            {"key": "d:X:Hobgoblin II", "kind": "drone"},
         ]
         rows = [
             (100, Kind.DAMAGE, "p:us", "p:foe", "Gun", 500, Flag.CAN_MISS, 1),
@@ -352,6 +353,7 @@ class AggregateTest(TestCase):
             (110, Kind.DAMAGE, "p:us", "c:X:HAM", "Bomb", 900, Flag.NON_SHIP_TARGET, 1),
             (111, Kind.DAMAGE, "p:us", "n:Rat", "Gun", 10, 0, 1),
             (112, Kind.DAMAGE, "p:us", "p:foe", "Gun", 500, Flag.CAN_MISS, 2),
+            (113, Kind.DAMAGE, "p:us", "d:X:Hobgoblin II", "Bomb", 40, Flag.NON_SHIP_TARGET, 1),
         ]
         self.store = fight_store(rows, self.actors)
         self.store.column("dup_group")[0] = self.store.column("dup_group")[12] = 0
@@ -362,6 +364,7 @@ class AggregateTest(TestCase):
             "s:1:friendly_act:Loki": {"name": "Unknown Loki", "kind": "ship_only", "side": 10, "alias": "p:mate"},
             "c:X:HAM": {"name": "HAM", "kind": "charge", "party": False},
             "n:Rat": {"name": "Rat", "kind": "npc", "party": False},
+            "d:X:Hobgoblin II": {"name": "Hobgoblin II", "kind": "drone", "party": False},
             "__log:1": {"key": "p:us", "party": False},
         }
 
@@ -380,7 +383,8 @@ class AggregateTest(TestCase):
         self.assertEqual(rows["p:us"]["misses"], 1)
         self.assertEqual(rows["p:us"]["hit_pct"], 50.0)
         self.assertEqual(rows["p:us"]["ff_out"], 30)
-        self.assertEqual(rows["p:us"]["non_ship_out"], 900)
+        self.assertEqual(rows["p:us"]["missile_out"], 900)
+        self.assertEqual(rows["p:us"]["non_ship_out"], 40)
         self.assertEqual(rows["p:mate"]["rep_out"]["shield"], 250)  # the Loki was Mate
         self.assertEqual(rows["p:us"]["cap_in"], 100)
         self.assertEqual(rows["p:us"]["neut_in"], 60)
@@ -392,6 +396,7 @@ class AggregateTest(TestCase):
         self.assertEqual(sum(result["series"]["damage_out"]), 500)
         self.assertEqual(sum(result["series"]["damage_in"]), 300)
         self.assertEqual(sum(result["series"]["friendly_fire"]), 30)
+        self.assertEqual(sum(result["series"]["missile_out"]), 900)
         target = next(t for t in result["targets"] if t["key"] == "p:foe")
         self.assertTrue(target["died"])
         self.assertEqual(result["totals"]["10"]["damage_out"], 500)
@@ -401,7 +406,15 @@ class AggregateTest(TestCase):
         with_non = aggregate(
             self.store, self.participants, {1, 2}, Perspective("side", "10"), 10, include_non_ships=True
         )
-        self.assertEqual({r["key"]: r for r in with_non["pilots"]}["p:us"]["damage_out"], 1400)
+        # The drone counts as damage dealt; the missile never does, and keeps its own figure.
+        us = {r["key"]: r for r in with_non["pilots"]}["p:us"]
+        self.assertEqual((us["damage_out"], us["missile_out"], us["non_ship_out"]), (540, 900, 0))
+        self.assertEqual(sum(with_non["series"]["damage_out"]), 540)
+        self.assertEqual(sum(with_non["series"]["missile_out"]), 900)
+        # Seen from the other side, our hits on missiles are nobody's damage out or in.
+        foe_view = aggregate(self.store, self.participants, {1, 2}, Perspective("side", "20"), 10)
+        self.assertEqual(sum(foe_view["series"]["missile_out"]), 0)
+        self.assertEqual(sum(foe_view["series"]["damage_in"]), 500)
         only_two = aggregate(self.store, self.participants, {2}, Perspective("pilot", "p:us"), 5)
         self.assertEqual(sum(only_two["series"]["damage_out"]), 500)
         log_view = aggregate(self.store, self.participants, {1, 2}, Perspective("log", "1"), 10)
@@ -414,7 +427,8 @@ class AggregateTest(TestCase):
         result = aggregate(self.store, self.participants, {1, 2}, Perspective("side", "10"), 10, window=(101, 111))
         us = {r["key"]: r for r in result["pilots"]}["p:us"]
         self.assertEqual((us["damage_out"], us["hits"], us["misses"]), (0, 0, 1))
-        self.assertEqual((us["ff_out"], us["non_ship_out"], us["damage_in"]), (30, 900, 300))
+        self.assertEqual((us["ff_out"], us["missile_out"], us["non_ship_out"], us["damage_in"]), (30, 900, 0, 300))
+        self.assertEqual(result["series"]["missile_out"], [0, 900])
         self.assertEqual((result["start"], result["end"], result["window"]), (101, 111, [101, 111]))
         self.assertEqual(result["labels"], [100, 110])  # the whole window, quiet buckets included
         # A hit counts when any log's copy of it falls inside the window.
@@ -423,7 +437,7 @@ class AggregateTest(TestCase):
         breakdown = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us", window=(101, 111))
         weapons = {w["name"]: w for w in breakdown["weapons"]}
         self.assertEqual((weapons["Gun"]["damage"], weapons["Gun"]["misses"], weapons["Gun"]["other"]), (0, 1, 10))
-        self.assertEqual((weapons["Bomb"]["ff"], weapons["Bomb"]["non_ship"]), (30, 900))
+        self.assertEqual((weapons["Bomb"]["ff"], weapons["Bomb"]["missile"], weapons["Bomb"]["non_ship"]), (30, 900, 0))
         self.assertEqual(breakdown["damaged_by"], [{"name": "Foe", "value": 300}])
 
     def test_drilldown_and_breakdown(self):
@@ -435,17 +449,23 @@ class AggregateTest(TestCase):
         self.assertEqual(kinds["events"][0]["src"], "Mate")
         breakdown = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us")
         weapons = {w["name"]: w for w in breakdown["weapons"]}
-        # Same rules as the table: the duplicate counts once, friendly fire, the missile
-        # and the NPC sit beside the damage instead of in it.
+        # Same rules as the table: the duplicate counts once, friendly fire, the missile,
+        # the drone and the NPC sit beside the damage instead of in it.
         self.assertEqual(breakdown["weapons"][0]["name"], "Gun")
         self.assertEqual(
-            {k: weapons["Gun"][k] for k in ("damage", "hits", "misses", "ff", "non_ship", "other")},
-            {"damage": 500, "hits": 1, "misses": 1, "ff": 0, "non_ship": 0, "other": 10},
+            {k: weapons["Gun"][k] for k in ("damage", "hits", "misses", "ff", "missile", "non_ship", "other")},
+            {"damage": 500, "hits": 1, "misses": 1, "ff": 0, "missile": 0, "non_ship": 0, "other": 10},
         )
-        self.assertEqual((weapons["Bomb"]["damage"], weapons["Bomb"]["ff"], weapons["Bomb"]["non_ship"]), (0, 30, 900))
+        self.assertEqual(
+            {k: weapons["Bomb"][k] for k in ("damage", "ff", "missile", "non_ship")},
+            {"damage": 0, "ff": 30, "missile": 900, "non_ship": 40},
+        )
         self.assertEqual(breakdown["targets"], [{"name": "Foe", "value": 500}])
+        # Counting drones and structures moves the drone into the damage, never the missile.
         with_non = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us", include_non_ships=True)
-        self.assertEqual((with_non["weapons"][0]["name"], with_non["weapons"][0]["damage"]), ("Bomb", 900))
+        bomb = {w["name"]: w for w in with_non["weapons"]}["Bomb"]
+        self.assertEqual((bomb["damage"], bomb["missile"], bomb["non_ship"]), (40, 900, 0))
+        self.assertEqual(with_non["targets"], [{"name": "Foe", "value": 500}, {"name": "Hobgoblin II", "value": 40}])
         log_two = pilot_breakdown(self.store, self.participants, {1, 2}, "p:us", only_log=2)
         self.assertEqual([(w["name"], w["damage"]) for w in log_two["weapons"]], [("Gun", 500)])
         self.assertEqual(breakdown["repped_by"][0]["name"], "Mate")

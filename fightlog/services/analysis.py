@@ -139,8 +139,13 @@ def default_side(fight: Fight) -> Side | None:
     return next((s for s in sides if s.order > 0 and s.size), friendly)
 
 
+# Bump when aggregate() counts differently or returns other fields, so results cached by
+# an older version are not served after an upgrade.
+RESULT_VERSION = 2
+
+
 def _cache_key(fight: Fight, *parts) -> str:
-    digest = hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    digest = hashlib.sha1(json.dumps([RESULT_VERSION, *parts], sort_keys=True, default=str).encode()).hexdigest()[:16]
     return f"fightlog:agg:{fight.pk}:{fight.built_version}:{digest}"
 
 

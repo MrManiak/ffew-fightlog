@@ -71,14 +71,25 @@ class SampleLogTest(TestCase):
         loki = self.fight.participants.get(kind=Participant.Kind.SHIP_ONLY, ships="Loki", key__contains="friendly_act")
         self.assertEqual(loki.side, friendly)
 
-    def test_smartbomb_damage_to_missiles_is_left_out(self):
+    def test_smartbomb_damage_to_missiles_is_its_own_figure(self):
         friendly = self.fight.sides.get(order=0)
         logs = default_active_logs(self.fight)
         without = analysis(self.fight, logs, f"side:{friendly.pk}", 10, False)
         with_non_ships = analysis(self.fight, logs, f"side:{friendly.pk}", 10, True)
-        self.assertLess(sum(without["series"]["damage_out"]), sum(with_non_ships["series"]["damage_out"]))
-        listener = next(p for p in without["pilots"] if p["name"] == "Pilot 001")
-        self.assertGreater(listener["non_ship_out"], 0)
+
+        def listener(result):
+            return next(p for p in result["pilots"] if p["name"] == "Pilot 001")
+
+        missiles = listener(without)["missile_out"]
+        self.assertGreater(missiles, 0)
+        self.assertEqual(sum(without["series"]["missile_out"]), missiles)
+        # Counting drones and structures adds those to the damage dealt, and never the missiles.
+        self.assertEqual(listener(with_non_ships)["missile_out"], missiles)
+        self.assertEqual(sum(with_non_ships["series"]["missile_out"]), missiles)
+        drones = listener(without)["non_ship_out"]
+        self.assertGreater(drones, 0)
+        added = listener(with_non_ships)["damage_out"] - listener(without)["damage_out"]
+        self.assertTrue(0 < added <= drones, (added, drones, missiles))
 
     def test_title_and_system(self):
         self.assertIn("WEFEW vs -PS-", self.fight.title)
@@ -192,6 +203,7 @@ class FiveLogsTest(TestCase):
                 self.assertEqual(total("hits"), row["hits"], label)
                 self.assertEqual(total("misses"), row["misses"], label)
                 self.assertEqual(total("ff"), row["ff_out"], label)
+                self.assertEqual(total("missile"), row["missile_out"], label)
                 self.assertEqual(total("non_ship"), 0 if non_ships else row["non_ship_out"], label)
                 checked += bool(weapons)
         self.assertGreater(checked, 20)
@@ -201,7 +213,7 @@ class FiveLogsTest(TestCase):
         self.assertTrue(0 < damage < sum(whole["series"]["damage_out"]), damage)
         listener = next(r for r in analysis(self.fight, logs, None, 10, False)["pilots"] if r["name"] == "Pilot 001")
         weapons = pilot(self.fight, logs, listener["key"])["weapons"]
-        self.assertTrue(sum(w["ff"] for w in weapons) and sum(w["non_ship"] for w in weapons))
+        self.assertTrue(all(sum(w[field] for w in weapons) for field in ("ff", "missile", "non_ship")))
 
     def test_uploading_in_another_order_gives_the_same_sides(self):
         before = {k: v for k, v in corp_sides(self.fight).items()}

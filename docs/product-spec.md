@@ -195,12 +195,13 @@ This section was checked against about 16,000 local logs (2022–2026), five log
   - sides with pilot counts and ship-class mix
   - losses and ISK per side, plus related kills
   - number of logs and coverage (for example "12 of 41 friendly pilots uploaded")
-- **Timeline chart:** time-bucketed series (5s / 10s / 30s / 1m selectable) for damage, reps, neuts/nos, jams and tackle, each split into in and out, plus friendly fire as its own series.
+- **Timeline chart:** time-bucketed series (5s / 10s / 30s / 1m selectable) for damage, reps, neuts/nos, jams and tackle, each split into in and out, plus friendly fire and damage to missiles as their own series.
   - "In" and "out" are relative to the selected perspective: a whole side (default: friendly), one pilot, or one log.
   - Killmail markers appear on the time axis, with related kills marked as such. Clicking a bucket shows the underlying events.
 - **Per-side tables:** one row per pilot, sortable, with a totals row. Columns:
   - Ship(s)
   - Damage dealt and taken, and friendly fire dealt
+  - Damage dealt to missiles in flight, when the fight has any
   - Hit % plus a hit-quality breakdown, for turrets, drones and fighters only. Missiles, smartbombs and bombs never miss, so they show "n/a"
   - Reps given and received (shield/armor/hull) and cap transfers
   - Neut and nos GJ, out and in
@@ -279,7 +280,8 @@ This section was checked against about 16,000 local logs (2022–2026), five log
 ## Metric definitions
 
 - **Damage:** the sum of landed hit amounts.
-  - Damage to drones, missiles, probes and deployables is tracked separately and left out of pilot totals by default (toggle available).
+  - Damage to missiles in flight is its own figure and never counts as damage dealt. Bombs and probes in flight count as missiles here. Missiles fired by NPCs are left out, like every other NPC event.
+  - Damage to drones, deployables and structures is tracked separately and left out of pilot totals by default (toggle available).
   - Friendly fire (damage between pilots on the same side) is shown separately and doesn't count as damage dealt.
 - **Hit %:** landed hits ÷ (landed hits + misses), per weapon group, for turrets, drones and fighters only. It is shown with the hit-quality distribution. For pilots who didn't upload, incoming hit % is partial.
 - **Reps:** HP restored by remote shield, armor and hull reps. **Cap transfers** are shown separately.
@@ -304,7 +306,7 @@ The fight of 2026-10-25 in J-space system 31001176 is the reference. Five of its
      - TRX26 and W-SPG
    - **Unknown:** YAGAS, SH-R, T.-R. and NPE. All four only exchanged smartbomb hits with us. YAGAS, whose smartbombs also hit us, carries the "likely friendly" hint.
    - BP RU, with only 2 targeted shots, may come out either Hostile or Unknown.
-   - Smartbomb damage to missiles in flight is left out of pilot totals.
+   - Smartbomb damage to missiles in flight is left out of pilot totals and shown as its own figure.
    - The "boosted by Loki" lines count as reps in, from a friendly Loki.
 2. **All five logs:**
    - They form one fight from 20:19 to about 20:45. A later skirmish at 20:53, a Bhaalgorn neuting our pilots, is a separate small fight.

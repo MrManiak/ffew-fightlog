@@ -62,6 +62,32 @@ RESULT_JS = """() => {
     return {window: r.window, labels: r.labels.length, damage: r.series.damage_out.reduce((a, b) => a + b, 0)};
 }"""
 
+# Where damage to missiles shows on the page, beside what the analysis says it should be.
+MISSILES_JS = """() => {
+    const r = window.fightlog.lastResult();
+    const tile = document.querySelector('#totals [data-total="Damage to missiles"] [title]');
+    const heads = (table) => Array.from(table.querySelectorAll('thead th')).map((th) => th.textContent.trim());
+    const tables = Array.from(document.querySelectorAll('table.fl-pilots'));
+    const column = heads(tables[0]).indexOf('Dmg to missiles');
+    const cells = tables.flatMap((table) => Array.from(table.querySelectorAll('tbody tr')))
+        .map((row) => Number(row.children[column].dataset.order));
+    const expected = r.series.missile_out.reduce((a, b) => a + b, 0);
+    const best = r.pilots.reduce((a, b) => (b.missile_out > a.missile_out ? b : a));
+    return {
+        expected,
+        expectedText: expected.toLocaleString(),
+        tile: tile ? tile.title : '',
+        line: window.fightlog.chart().data.datasets.some((d) => d.label === 'Damage to missiles'),
+        column,
+        tablesWithColumn: tables.filter((table) => heads(table).includes('Dmg to missiles')).length,
+        tables: tables.length,
+        cells: cells.reduce((a, b) => a + b, 0),
+        rows: r.pilots.reduce((a, p) => a + p.missile_out, 0),
+        damage: r.series.damage_out.reduce((a, b) => a + b, 0),
+        best: {key: best.key, text: best.missile_out.toLocaleString()},
+    };
+}"""
+
 # Chart.js draws nothing when the tooltip has no title or body left after filtering.
 TOOLTIP_QUIET_JS = """() => {
     const t = window.fightlog.chart().tooltip;
@@ -243,6 +269,36 @@ class FightPageTest(BrowserTestCase):
         page.wait_for_selector("#drill-modal.show")
         page.wait_for_selector("#weapons-table tfoot")
         self.assertEqual(page.locator("#weapons-table tfoot td").nth(1).inner_text(), table_damage)
+
+    def test_damage_to_missiles_has_its_own_tile_line_and_columns(self):
+        self.open_fight()
+        page = self.page
+        shown = page.evaluate(MISSILES_JS)
+        self.assertGreater(shown["expected"], 0)
+        self.assertTrue(shown["tile"].endswith(shown["expectedText"]), shown)
+        self.assertTrue(shown["line"])
+        self.assertEqual(shown["tablesWithColumn"], shown["tables"])
+        self.assertEqual(shown["cells"], shown["rows"])
+        self.assertGreaterEqual(shown["rows"], shown["expected"])
+
+        # The tick box counts drones and structures as damage dealt, and leaves the missiles where they are.
+        self.assertEqual(page.inner_text("label[for=non-ships]"), "Count damage to drones and structures")
+        page.check("#non-ships")
+        page.wait_for_function(f"() => ({MISSILES_JS})().damage > {shown['damage']}")
+        ticked = page.evaluate(MISSILES_JS)
+        self.assertEqual((ticked["expected"], ticked["cells"]), (shown["expected"], shown["cells"]))
+
+        # The pilot who hit the most missiles: the pop-up's Missiles column adds up to the table's cell.
+        best = ticked["best"]
+        row = page.locator("table.fl-pilots tbody tr", has=page.locator(f'a.fl-pilot[data-key="{best["key"]}"]'))
+        self.assertEqual(row.locator("td").nth(ticked["column"]).inner_text(), best["text"])
+        row.locator("a.fl-pilot").click()
+        page.wait_for_selector("#weapons-table tfoot")
+        heads = page.locator("#weapons-table thead th").all_inner_texts()
+        self.assertIn("Missiles", heads)
+        self.assertNotIn("Drones & missiles", heads)
+        total = page.locator("#weapons-table tfoot td").nth(heads.index("Missiles"))
+        self.assertEqual(total.inner_text(), best["text"])
 
     def test_chart_click_shows_the_events_in_that_bucket(self):
         self.open_fight()
