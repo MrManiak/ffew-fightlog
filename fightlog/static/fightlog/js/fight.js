@@ -18,6 +18,7 @@
         ["tackle_out", "Tackle out", "#9e9d24"],
         ["tackle_in", "Tackle in", "#5d4037"],
         ["friendly_fire", "Friendly fire", "#9e9e9e"],
+        ["missile_out", "Damage to missiles", "#e040fb"],
     ];
     const COUNT_SERIES = new Set(["jam_out", "jam_in", "tackle_out", "tackle_in"]);
     const SERIES_COLOR = Object.fromEntries(SERIES.map(([key, , color]) => [key, color]));
@@ -30,6 +31,7 @@
         { label: "Jams", out: ["jam_out"], in: ["jam_in"] },
         { label: "Tackle", out: ["tackle_out"], in: ["tackle_in"] },
         { label: "Friendly fire", out: ["friendly_fire"] },
+        { label: "Damage to missiles", out: ["missile_out"], onlyIfAny: true },
     ];
 
     function loadSaved() {
@@ -436,6 +438,11 @@
             groups.get(key).push(r);
         });
         const order = config.sides.map((s) => String(s.id)).concat(["unknown"]);
+        // Most fights have no smartbombs catching missiles: the column is there when anyone hit one.
+        const missiles = result.pilots.some((r) => r.missile_out);
+        const missilesHead = missiles
+            ? '<th class="text-end" title="Damage to missiles in flight. Never part of Dmg out.">Dmg to missiles</th>'
+            : "";
         let html = "";
         order.forEach((key) => {
             const rows = groups.get(key);
@@ -447,7 +454,7 @@
                 <span class="small text-body-secondary">grey cells: only what touched uploaders · italic: unattributed</span></div>
                 <div class="card-body table-responsive"><table class="table table-sm table-hover fl-pilots" data-side="${key}"><thead><tr>
                 <th>Pilot</th><th>Ships</th><th>Corp</th><th class="text-end">Dmg out</th><th class="text-end">Dmg in</th><th class="text-end">FF</th>
-                <th class="text-end">Hit %</th><th class="text-end">Reps out</th><th class="text-end">Reps in</th><th class="text-end">Cap out</th>
+                ${missilesHead}<th class="text-end">Hit %</th><th class="text-end">Reps out</th><th class="text-end">Reps in</th><th class="text-end">Cap out</th>
                 <th class="text-end">Neut out</th><th class="text-end">Neut in</th><th class="text-end">Jams out/in</th><th class="text-end">Tackle out/in</th><th>Log</th>
                 </tr></thead><tbody>`;
             rows.forEach((r) => {
@@ -460,6 +467,7 @@
                     <td class="text-end" data-order="${r.damage_out}">${fmt(r.damage_out)}</td>
                     <td class="text-end" data-order="${r.damage_in}">${fmt(r.damage_in)}</td>
                     <td class="text-end" data-order="${r.ff_out}">${fmt(r.ff_out)}</td>
+                    ${missiles ? `<td class="text-end" data-order="${r.missile_out}">${fmt(r.missile_out)}</td>` : ""}
                     <td class="text-end" data-order="${r.hit_pct ?? -1}">${r.hit_pct === null ? stateBadge(r, "hit_pct") : r.hit_pct + "%"}</td>
                     <td class="text-end" data-order="${repsOut}">${fmt(repsOut)}</td>
                     <td class="text-end" data-order="${repsIn}">${fmt(repsIn)}</td>
@@ -579,7 +587,8 @@
     // Damage the pilot table leaves out of "Dmg out", shown beside the weapons when there is any.
     const LEFT_OUT = [
         ["ff", "Friendly fire", "Hits on our own side: the table's FF column"],
-        ["non_ship", "Drones & missiles", "Hits on drones, missiles in flight and structures. Tick “Count damage to drones, missiles and structures” to count them"],
+        ["missile", "Missiles", "Hits on missiles in flight: the table's Dmg to missiles column"],
+        ["non_ship", "Drones & structures", "Hits on drones and structures. Tick “Count damage to drones and structures” to count them"],
         ["other", "NPCs & others", "Hits on NPCs and anyone else outside the fight"],
     ];
 

@@ -17,9 +17,16 @@ The parser is unchanged (version 1), so no re-parse is needed. This version has 
   - A log that another fight also uses is kept, without the deleted fight's part. Re-parsing it does not bring the fight back.
   - A log uploaded for a deleted fight joins it and stays hidden. *My logs* and the upload page say when a log is in a deleted fight.
 - The `curate_fights` permission is now labelled "Can edit and delete any fight, delete any log and manage allies".
+- **Damage to missiles is its own figure.** What smartbombs (or anything else) did to players' missiles in flight is shown on the fight page:
+  - a *Dmg to missiles* column in the pilot tables
+  - a *Damage to missiles* tile above the timeline, and a line on it
+  - a *Missiles* column in the pilot drill-down's weapons table
+
+  They appear only when the fight has any. Bombs and probes in flight count as missiles. Missiles fired by NPCs are not counted, like every other NPC event. Existing fights show the figure without a rebuild.
 
 ### Changed
 
+- Damage to missiles never counts as *Dmg out* any more. The tick box that used to add it is now *Count damage to drones and structures* and adds only those. Links shared with the box ticked show a lower *Dmg out* than before in fights with smartbombed missiles.
 - The daily `purge_expired_logs` task now also purges deleted fights. The beat entry from [install.md](docs/install.md) stays as it is.
 
 ### Fixed

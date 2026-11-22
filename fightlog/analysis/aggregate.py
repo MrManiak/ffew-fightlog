@@ -6,7 +6,7 @@ One pass over the packed fight store. Pure Python: 250k events take well under a
 from collections import defaultdict
 from dataclasses import dataclass
 
-from fightlog.parser import Flag, Kind, Quality
+from fightlog.parser import ActorKind, Flag, Kind, Quality
 
 from .identity import display_name
 
@@ -14,6 +14,7 @@ SERIES = (
     "damage_out",
     "damage_in",
     "friendly_fire",
+    "missile_out",
     "rep_out",
     "rep_in",
     "cap_out",
@@ -38,6 +39,14 @@ F_AOE, F_CAN_MISS, F_NON_SHIP, F_OBSERVED = (
     int(Flag.OBSERVED),
 )
 MAX_WINDOW_BUCKETS = 20000  # a selected window wider than this is drawn over its events only
+
+
+def _missile_targets(actors: list[dict]) -> list[bool]:
+    """Per actor: is it a charge in flight (a missile, bomb or probe)?
+
+    Damage to these is its own figure. It is never damage to a ship, whatever ``include_non_ships`` says.
+    """
+    return [a.get("kind") == ActorKind.CHARGE for a in actors]
 
 
 @dataclass
@@ -72,6 +81,7 @@ def _new_row(key: str, info: dict) -> dict:
         "damage_out": 0,
         "damage_in": 0,
         "ff_out": 0,
+        "missile_out": 0,
         "non_ship_out": 0,
         "hits": 0,
         "misses": 0,
@@ -105,6 +115,8 @@ def aggregate(
 
     ``participants`` maps every actor key to {"name", "kind", "side", "has_log", ...},
     with ship-only actors already mapped to the pilot they were attributed to via "alias".
+    ``include_non_ships`` counts damage to drones and structures as damage dealt. Damage to
+    missiles in flight never is: it has its own figure, ``missile_out``.
     ``window`` (first, last second, inclusive) narrows everything to that time span. It is
     applied before de-duplication, so a hit counts if any log's copy of it falls inside.
     """
@@ -112,6 +124,7 @@ def aggregate(
     alias = [participants.get(a["key"], {}).get("alias", a["key"]) for a in actors]
     side = [participants.get(k, {}).get("side") for k in alias]
     is_party = [k in participants and participants[k].get("party", True) for k in alias]
+    is_missile = _missile_targets(actors)
 
     def in_perspective(i: int) -> bool:
         if perspective.kind == "side":
@@ -161,7 +174,7 @@ def aggregate(
         end = t if end is None or t > end else end
         kind, amount, flags = kind_col[i], amount_col[i], flags_col[i]
         s, d = src_col[i], tgt_col[i]
-        # Only player-vs-player events count; non-ship targets (drones, missiles,
+        # Only player-vs-player events count; non-ship targets (missiles, drones,
         # structures without a side) are tracked separately below.
         if not is_party[s] or not (is_party[d] or (kind == K_DAMAGE and flags & F_NON_SHIP)):
             continue
@@ -176,6 +189,12 @@ def aggregate(
         src_row = row(s) if is_party[s] else None
         tgt_row = row(d) if is_party[d] else None
         if kind == K_DAMAGE:
+            if is_missile[d]:
+                if out:
+                    bucket_row[series_index["missile_out"]] += amount
+                if src_row:
+                    src_row["missile_out"] += amount
+                continue
             non_ship = bool(flags & F_NON_SHIP)
             if non_ship and not include_non_ships:
                 if src_row:
@@ -376,17 +395,18 @@ def pilot_breakdown(
     """One pilot's weapons, targets, attackers, reps and ewar, counted by the same rules as ``aggregate``.
 
     A weapon's ``damage``, ``hits`` and ``misses`` add up to the pilot's row in the table. What the table
-    leaves out of "Dmg out" is reported beside it: ``ff`` (friendly fire), ``non_ship`` (drones, missiles
-    and structures, unless they are included) and ``other`` (NPCs and others outside the fight).
-    ``only_log`` mirrors a log perspective, under which the table counts that one log, and ``window``
-    the table's time window.
+    leaves out of "Dmg out" is reported beside it: ``ff`` (friendly fire), ``missile`` (missiles in flight),
+    ``non_ship`` (drones and structures, unless they are included) and ``other`` (NPCs and others outside
+    the fight). ``only_log`` mirrors a log perspective, under which the table counts that one log, and
+    ``window`` the table's time window.
     """
     actors = store.actors
     alias = [participants.get(a["key"], {}).get("alias", a["key"]) for a in actors]
     side = [participants.get(k, {}).get("side") for k in alias]
     is_party = [k in participants and participants[k].get("party", True) for k in alias]
+    is_missile = _missile_targets(actors)
     weapons: dict[str, dict] = defaultdict(
-        lambda: {"damage": 0, "hits": 0, "misses": 0, "ff": 0, "non_ship": 0, "other": 0}
+        lambda: {"damage": 0, "hits": 0, "misses": 0, "ff": 0, "missile": 0, "non_ship": 0, "other": 0}
     )
     targets: dict[str, int] = defaultdict(int)
     sources: dict[str, int] = defaultdict(int)
@@ -411,7 +431,9 @@ def pilot_breakdown(
         if kind == K_DAMAGE and s == key:
             w = weapons[store.module_name(module) or "?"]
             non_ship = bool(flags & F_NON_SHIP)
-            if not is_party[tgt] and not non_ship:
+            if is_missile[tgt]:
+                w["missile"] += amount
+            elif not is_party[tgt] and not non_ship:
                 w["other"] += amount
             elif non_ship and not include_non_ships:
                 w["non_ship"] += amount

@@ -379,9 +379,9 @@ Inputs:
 - the bucket size: 5, 10, 30 or 60 s
 
 Outputs:
-- **Timeline:** per bucket, in and out values for damage, reps (by type), neut/nos GJ, jams and tackle, plus friendly fire as its own series. "Out" means the source is in the perspective. "In" means the target is in the perspective. Core and related killmail markers are included.
+- **Timeline:** per bucket, in and out values for damage, reps (by type), neut/nos GJ, jams and tackle, plus friendly fire and damage to missiles (`missile_out`, out only) as their own series. "Out" means the source is in the perspective. "In" means the target is in the perspective. Core and related killmail markers are included.
 - **Per-pilot table:**
-  - damage dealt and taken, and friendly fire dealt
+  - damage dealt and taken, friendly fire dealt, and damage dealt to missiles
   - hit % and the hit-quality histogram
   - reps given and received (shield, armor, hull)
   - cap given and received
@@ -398,7 +398,8 @@ Outputs:
   - *n/a*: the metric doesn't apply
   - *unattributed*: ship-type-only events not credited to anyone
 - **Metric rules:**
-  - Damage to drones, charges and deployables is kept out of pilot totals unless `include_non_ships=1` is passed.
+  - Damage to charges in flight (missiles, bombs, probes) is its own figure, `missile_out`, and is never part of damage dealt. A target is a charge when its actor's `kind` in the store is `charge`, so no flag and no re-parse is involved.
+  - Damage to drones, deployables and structures is kept out of pilot totals unless `non_ships=1` is passed.
   - Friendly fire (source and target on the same side) is kept out of damage dealt.
   - Hit % is hits ÷ (hits + misses), computed per shooter and weapon group, and only for weapon groups that can miss: turrets, drones and fighters. Everything else is *n/a*. In the corpus, missiles (210,072 lines) and smartbombs (109,049 lines) always "Hit".
 - **Caching:** the default view is precomputed into `Fight.summary` during rebuild. Any other view is cached in the Django cache (Redis) under `fightlog:agg:{fight}:{built_version}:{sha1(logset)}:{perspective}:{bucket}` for 24 h. A new `built_version` invalidates all of them.
